@@ -1,0 +1,112 @@
+version: 2
+
+models:
+  - name: fct_mrr_monthly_by_plan
+    description: >
+      Billed monthly recurring revenue: paid invoice amounts converted to EUR, by
+      invoice month and plan, for invoices dated on or before the reporting cutoff.
+      One row per month and plan, zero when nothing was paid. Revenue on a
+      subscription whose customer is missing from the export is included: the payment
+      is real even if the customer record is not.
+    columns:
+      - name: revenue_month
+        description: First day of the invoice month.
+        data_tests: [not_null]
+      - name: plan_name
+        description: starter, growth or scale.
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [starter, growth, scale]
+      - name: mrr_eur
+        description: Sum of paid invoice amounts in EUR.
+        data_tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+      - name: paid_invoices
+        description: Paid invoices behind mrr_eur.
+        data_tests: [not_null]
+      - name: paying_subscriptions
+        description: Distinct subscriptions with a paid invoice in the month.
+        data_tests: [not_null]
+
+  - name: dim_customer_ltv
+    description: >
+      Customer lifetime value to date: paid revenue in EUR per customer, with country,
+      plan mix and subscription status at the reporting cutoff. Every customer appears,
+      including those with no usable subscription. Quarantined subscriptions and
+      invoices are excluded and the customer is flagged with has_excluded_records.
+    columns:
+      - name: customer_id
+        description: Billing system key; one row per customer in stg_customers.
+        data_tests: [unique, not_null]
+      - name: customer_name
+      - name: email
+        description: NULL when the export value was not a valid address.
+      - name: country
+        description: ISO-3166 alpha-2, NULL when missing in the export.
+      - name: created_at
+        description: NULL when the export value was after the cutoff.
+      - name: first_subscription_date
+        description: Earliest start_date across usable subscriptions.
+      - name: subscriptions_count
+        description: Usable subscriptions ever held.
+        data_tests: [not_null]
+      - name: active_subscriptions
+        description: Subscriptions in state active at the cutoff.
+        data_tests: [not_null]
+      - name: plans_ever
+        description: Distinct plans ever held, comma separated.
+      - name: current_plans
+        description: Distinct plans on subscriptions still running at the cutoff.
+      - name: current_status
+        description: >
+          active if any subscription is active, else pending_cancellation, paused,
+          pending, cancelled; no_eligible_subscription when all were quarantined.
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [active, pending_cancellation, paused, pending, cancelled, no_eligible_subscription]
+      - name: lifetime_paid_eur
+        description: Sum of paid invoice amounts in EUR on or before the cutoff.
+        data_tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+      - name: paid_invoices
+        description: Paid invoices behind lifetime_paid_eur.
+        data_tests: [not_null]
+      - name: has_excluded_records
+        description: True when a quarantined subscription or invoice belongs to this customer.
+        data_tests: [not_null]
+
+  - name: fct_churn_monthly
+    description: >
+      Realised churn per calendar month: subscriptions with status cancelled whose
+      trusted end_date is in the month and on or before the cutoff, and the contractual
+      MRR they carried (sum of monthly_price). Cancellations dated after the cutoff and
+      the subscription with an inconsistent date range are not counted. One row per
+      month, zero when nothing churned.
+    columns:
+      - name: churn_month
+        description: First day of the month of end_date.
+        data_tests: [unique, not_null]
+      - name: churned_subscriptions
+        description: Subscriptions whose end_date falls in the month.
+        data_tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+      - name: churned_mrr_eur
+        description: Contractual monthly value lost, in EUR.
+        data_tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
