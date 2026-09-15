@@ -11,3 +11,4 @@ airflow/.venv/
 airflow/logs/
 .dlt/
 _storage/
+.user.yml
