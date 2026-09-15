@@ -1,0 +1,6 @@
+dbt-core==1.11.*
+dbt-postgres==1.11.0
+dlt[postgres,sql_database]==1.30.0
+pymysql==1.1.1
+pandas>=2.2,<3
+sqlalchemy>=2.0,<3

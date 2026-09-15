@@ -1,0 +1,13 @@
+.venv/
+.local/
+target/
+dbt_packages/
+logs/
+__pycache__/
+*.pyc
+.env
+.DS_Store
+airflow/.venv/
+airflow/logs/
+.dlt/
+_storage/
