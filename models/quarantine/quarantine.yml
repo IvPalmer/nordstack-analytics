@@ -1,0 +1,26 @@
+version: 2
+
+models:
+  - name: rej_subscriptions
+    description: Subscriptions excluded from every mart, with the first rule they broke.
+    columns:
+      - name: subscription_id
+        data_tests: [not_null]
+      - name: reject_reason
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [unknown_plan, non_positive_price, missing_start_date, unknown_status]
+
+  - name: rej_invoices
+    description: Invoices excluded from every mart, with the first rule they broke.
+    columns:
+      - name: invoice_id
+        data_tests: [not_null]
+      - name: reject_reason
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [missing_invoice_date, missing_amount, non_positive_amount, unsupported_currency, unknown_status, unknown_subscription, rejected_subscription]
