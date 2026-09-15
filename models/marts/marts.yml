@@ -47,7 +47,7 @@ models:
       - name: email
         description: NULL when the export value was not a valid address.
       - name: country
-        description: ISO-3166 alpha-2, NULL when missing in the export.
+        description: Two-letter country code as exported, NULL when missing.
       - name: created_at
         description: NULL when the export value was after the cutoff or after the first subscription.
       - name: first_subscription_date
@@ -147,7 +147,9 @@ unit_tests:
         - {customer_id: C3, current_status: no_eligible_subscription, current_plans: null, plans_ever: null,            lifetime_paid_eur: 0,      paid_invoices: 0}
 
   - name: churn_by_month
-    description: Only cancelled subscriptions ended by the cutoff count, in the month of end_date; other months show zero.
+    description: >
+      Only cancelled subscriptions with a trusted end_date on or before the cutoff count,
+      in the month of end_date; other months show zero.
     model: fct_churn_monthly
     overrides:
       vars: {as_of_date: "2026-07-28"}
@@ -159,13 +161,38 @@ unit_tests:
           - {month_start: 2026-07-01}
       - input: ref('stg_subscriptions')
         rows:
-          - {subscription_id: S1, status: cancelled, end_date: 2026-05-15, monthly_price: 29.00}
-          - {subscription_id: S2, status: cancelled, end_date: 2026-05-20, monthly_price: 99.00}
-          - {subscription_id: S3, status: cancelled, end_date: 2026-09-01, monthly_price: 299.00}
-          - {subscription_id: S4, status: cancelled, end_date: null,       monthly_price: 299.00}
-          - {subscription_id: S5, status: active,    end_date: null,       monthly_price: 29.00}
+          - {subscription_id: may_a,        status: cancelled, end_date: 2026-05-15, monthly_price: 29.00}
+          - {subscription_id: may_b,        status: cancelled, end_date: 2026-05-20, monthly_price: 99.00}
+          - {subscription_id: after_cutoff, status: cancelled, end_date: 2026-07-29, monthly_price: 299.00}
+          - {subscription_id: untrusted,    status: cancelled, end_date: null,       monthly_price: 299.00}
+          - {subscription_id: not_churn,    status: paused,    end_date: 2026-06-10, monthly_price: 29.00}
     expect:
       rows:
         - {churn_month: 2026-05-01, churned_subscriptions: 2, churned_mrr_eur: "128.00"}
         - {churn_month: 2026-06-01, churned_subscriptions: 0, churned_mrr_eur: 0}
         - {churn_month: 2026-07-01, churned_subscriptions: 0, churned_mrr_eur: 0}
+
+  - name: mrr_by_month_and_plan
+    description: Paid revenue lands in its own month and plan; the grid is zero-filled.
+    model: fct_mrr_monthly_by_plan
+    given:
+      - input: ref('int_month_spine')
+        rows:
+          - {month_start: 2026-06-01}
+          - {month_start: 2026-07-01}
+      - input: ref('stg_subscriptions')
+        rows:
+          - {subscription_id: S1, plan_name: starter}
+          - {subscription_id: S2, plan_name: growth}
+      - input: ref('int_paid_invoices')
+        rows:
+          - {invoice_id: I1, subscription_id: S1, plan_name: starter, invoice_month: 2026-06-01, amount_eur: 29.00}
+          - {invoice_id: I2, subscription_id: S1, plan_name: starter, invoice_month: 2026-07-01, amount_eur: 29.00}
+          - {invoice_id: I3, subscription_id: S2, plan_name: growth,  invoice_month: 2026-07-01, amount_eur: 99.00}
+          - {invoice_id: I4, subscription_id: S2, plan_name: growth,  invoice_month: 2026-07-01, amount_eur: 99.00}
+    expect:
+      rows:
+        - {revenue_month: 2026-06-01, plan_name: growth,  mrr_eur: 0,        paid_invoices: 0, paying_subscriptions: 0}
+        - {revenue_month: 2026-06-01, plan_name: starter, mrr_eur: "29.00",  paid_invoices: 1, paying_subscriptions: 1}
+        - {revenue_month: 2026-07-01, plan_name: growth,  mrr_eur: "198.00", paid_invoices: 2, paying_subscriptions: 1}
+        - {revenue_month: 2026-07-01, plan_name: starter, mrr_eur: "29.00",  paid_invoices: 1, paying_subscriptions: 1}
