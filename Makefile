@@ -3,7 +3,8 @@
 export
 
 PY  ?= python3.12
-DBT  = .venv/bin/dbt --profiles-dir .
+DBT  = .venv/bin/dbt
+DBT_PROFILES_DIR = .
 AIRFLOW_CONSTRAINTS = https://raw.githubusercontent.com/apache/airflow/constraints-3.3.1/constraints-3.12.txt
 
 .PHONY: bootstrap db venv ingest deps build test docs clean nuke airflow-test
