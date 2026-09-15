@@ -1,0 +1,198 @@
+version: 2
+
+models:
+  - name: fct_mrr_monthly_by_plan
+    description: >
+      Billed monthly recurring revenue: paid invoice amounts converted to EUR, by
+      invoice month and plan, for invoices dated on or before the reporting cutoff.
+      One row per month and plan, zero when nothing was paid. Revenue on a
+      subscription whose customer is missing from the export is included: the payment
+      is real even if the customer record is not.
+    columns:
+      - name: revenue_month
+        description: First day of the invoice month.
+        data_tests: [not_null]
+      - name: plan_name
+        description: starter, growth or scale.
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [starter, growth, scale]
+      - name: mrr_eur
+        description: Sum of paid invoice amounts in EUR.
+        data_tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+      - name: paid_invoices
+        description: Paid invoices behind mrr_eur.
+        data_tests: [not_null]
+      - name: paying_subscriptions
+        description: Distinct subscriptions with a paid invoice in the month.
+        data_tests: [not_null]
+
+  - name: dim_customer_ltv
+    description: >
+      Customer lifetime value to date: paid revenue in EUR per customer, with country,
+      plan mix and subscription status at the reporting cutoff. Every customer appears,
+      including those with no usable subscription. Quarantined subscriptions and
+      invoices are excluded and the customer is flagged with has_excluded_records.
+    columns:
+      - name: customer_id
+        description: Billing system key; one row per customer in stg_customers.
+        data_tests: [unique, not_null]
+      - name: customer_name
+      - name: email
+        description: NULL when the export value was not a valid address.
+      - name: country
+        description: Two-letter country code as exported, NULL when missing.
+      - name: created_at
+        description: NULL when the export value was after the cutoff or after the first subscription.
+      - name: first_subscription_date
+        description: Earliest start_date across usable subscriptions.
+      - name: subscriptions_count
+        description: Usable subscriptions ever held.
+        data_tests: [not_null]
+      - name: active_subscriptions
+        description: Subscriptions in state active at the cutoff.
+        data_tests: [not_null]
+      - name: plans_ever
+        description: Distinct plans ever held, comma separated.
+      - name: current_plans
+        description: Distinct plans on subscriptions still running at the cutoff.
+      - name: current_status
+        description: >
+          active if any subscription is active, else pending_cancellation, paused,
+          pending, cancelled; no_eligible_subscription when all were quarantined.
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [active, pending_cancellation, paused, pending, cancelled, no_eligible_subscription]
+      - name: lifetime_paid_eur
+        description: Sum of paid invoice amounts in EUR on or before the cutoff.
+        data_tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+      - name: paid_invoices
+        description: Paid invoices behind lifetime_paid_eur.
+        data_tests: [not_null]
+      - name: has_excluded_records
+        description: True when a quarantined subscription or invoice belongs to this customer.
+        data_tests: [not_null]
+
+  - name: fct_churn_monthly
+    description: >
+      Realised churn per calendar month: subscriptions with status cancelled whose
+      trusted end_date is in the month and on or before the cutoff, and the contractual
+      MRR they carried (sum of monthly_price). Cancellations dated after the cutoff and
+      the subscription with an inconsistent date range are not counted. One row per
+      month, zero when nothing churned.
+    columns:
+      - name: churn_month
+        description: First day of the month of end_date.
+        data_tests: [unique, not_null]
+      - name: churned_subscriptions
+        description: Subscriptions whose end_date falls in the month.
+        data_tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+      - name: churned_mrr_eur
+        description: Contractual monthly value lost, in EUR.
+        data_tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+
+unit_tests:
+  - name: customer_status_and_revenue
+    description: >
+      Status is the strongest state across a customer's subscriptions, not the newest;
+      revenue is attributed per customer; no usable subscription gives no_eligible_subscription.
+    model: dim_customer_ltv
+    given:
+      - input: ref('stg_customers')
+        rows:
+          - {customer_id: C1}
+          - {customer_id: C2}
+          - {customer_id: C3}
+      - input: ref('stg_subscriptions')
+        rows:
+          - {customer_id: C1, subscription_id: S1, plan_name: growth,  start_date: 2025-01-01, subscription_state: active}
+          - {customer_id: C1, subscription_id: S2, plan_name: starter, start_date: 2025-06-01, subscription_state: cancelled}
+          - {customer_id: C2, subscription_id: S3, plan_name: scale,   start_date: 2025-01-01, subscription_state: paused}
+          - {customer_id: C2, subscription_id: S4, plan_name: scale,   start_date: 2025-02-01, subscription_state: pending_cancellation}
+      - input: ref('int_paid_invoices')
+        rows:
+          - {customer_id: C1, invoice_id: I1, amount_eur: "99.00"}
+          - {customer_id: C1, invoice_id: I2, amount_eur: "29.00"}
+          - {customer_id: C2, invoice_id: I3, amount_eur: "299.00"}
+      - input: ref('rej_subscriptions')
+        rows: []
+      - input: ref('rej_invoices')
+        rows: []
+      - input: ref('base_subscriptions')
+        rows: []
+    expect:
+      rows:
+        - {customer_id: C1, current_status: active,               current_plans: growth, plans_ever: "growth, starter", lifetime_paid_eur: "128.00", paid_invoices: 2}
+        - {customer_id: C2, current_status: pending_cancellation, current_plans: scale,  plans_ever: scale,             lifetime_paid_eur: "299.00", paid_invoices: 1}
+        - {customer_id: C3, current_status: no_eligible_subscription, current_plans: null, plans_ever: null,            lifetime_paid_eur: 0,      paid_invoices: 0}
+
+  - name: churn_by_month
+    description: >
+      Only cancelled subscriptions with a trusted end_date on or before the cutoff count,
+      in the month of end_date; other months show zero.
+    model: fct_churn_monthly
+    overrides:
+      vars: {as_of_date: "2026-07-28"}
+    given:
+      - input: ref('int_month_spine')
+        rows:
+          - {month_start: 2026-05-01}
+          - {month_start: 2026-06-01}
+          - {month_start: 2026-07-01}
+      - input: ref('stg_subscriptions')
+        rows:
+          - {subscription_id: may_a,        status: cancelled, end_date: 2026-05-15, monthly_price: "29.00"}
+          - {subscription_id: may_b,        status: cancelled, end_date: 2026-05-20, monthly_price: "99.00"}
+          - {subscription_id: after_cutoff, status: cancelled, end_date: 2026-07-29, monthly_price: "299.00"}
+          - {subscription_id: untrusted,    status: cancelled, end_date: null,       monthly_price: "299.00"}
+          - {subscription_id: not_churn,    status: paused,    end_date: 2026-06-10, monthly_price: "29.00"}
+    expect:
+      rows:
+        - {churn_month: 2026-05-01, churned_subscriptions: 2, churned_mrr_eur: "128.00"}
+        - {churn_month: 2026-06-01, churned_subscriptions: 0, churned_mrr_eur: 0}
+        - {churn_month: 2026-07-01, churned_subscriptions: 0, churned_mrr_eur: 0}
+
+  - name: mrr_by_month_and_plan
+    description: Paid revenue lands in its own month and plan; the grid is zero-filled.
+    model: fct_mrr_monthly_by_plan
+    given:
+      - input: ref('int_month_spine')
+        rows:
+          - {month_start: 2026-06-01}
+          - {month_start: 2026-07-01}
+      - input: ref('stg_subscriptions')
+        rows:
+          - {subscription_id: S1, plan_name: starter}
+          - {subscription_id: S2, plan_name: growth}
+      - input: ref('int_paid_invoices')
+        rows:
+          - {invoice_id: I1, subscription_id: S1, plan_name: starter, invoice_month: 2026-06-01, amount_eur: "29.00"}
+          - {invoice_id: I2, subscription_id: S1, plan_name: starter, invoice_month: 2026-07-01, amount_eur: "29.00"}
+          - {invoice_id: I3, subscription_id: S2, plan_name: growth,  invoice_month: 2026-07-01, amount_eur: "99.00"}
+          - {invoice_id: I4, subscription_id: S2, plan_name: growth,  invoice_month: 2026-07-01, amount_eur: "99.00"}
+    expect:
+      rows:
+        - {revenue_month: 2026-06-01, plan_name: growth,  mrr_eur: 0,        paid_invoices: 0, paying_subscriptions: 0}
+        - {revenue_month: 2026-06-01, plan_name: starter, mrr_eur: "29.00",  paid_invoices: 1, paying_subscriptions: 1}
+        - {revenue_month: 2026-07-01, plan_name: growth,  mrr_eur: "198.00", paid_invoices: 2, paying_subscriptions: 1}
+        - {revenue_month: 2026-07-01, plan_name: starter, mrr_eur: "29.00",  paid_invoices: 1, paying_subscriptions: 1}

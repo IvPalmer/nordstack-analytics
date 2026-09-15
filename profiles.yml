@@ -1,0 +1,13 @@
+# Defaults match docker-compose.yml; override with env vars (see .env.example).
+nordstack_analytics:
+  target: dev
+  outputs:
+    dev:
+      type: postgres
+      host: "{{ env_var('NORDSTACK_PG_HOST', '127.0.0.1') }}"
+      port: "{{ env_var('NORDSTACK_PG_PORT', '5432') | as_number }}"
+      user: "{{ env_var('NORDSTACK_PG_USER', 'dbt_user') }}"
+      password: "{{ env_var('NORDSTACK_PG_PASSWORD', 'dbt_password') }}"
+      dbname: "{{ env_var('NORDSTACK_PG_DB', 'analytics') }}"
+      schema: analytics
+      threads: 4

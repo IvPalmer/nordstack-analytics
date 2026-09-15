@@ -1,0 +1,151 @@
+version: 2
+
+models:
+  - name: stg_customers
+    description: >
+      One row per customer. Exact duplicate rows collapsed. An invalid email or a
+      creation date after the cutoff is NULL in the clean column while the *_raw
+      column keeps the exported value. Customers are never quarantined.
+    columns:
+      - name: customer_id
+        description: Billing system key (C0001 ...).
+        data_tests: [unique, not_null]
+      - name: customer_name
+        data_tests: [not_null]
+      - name: email
+        description: NULL when the export value is not a valid address (see email_raw).
+        data_tests: [valid_email]
+      - name: country
+        description: Two-letter country code as exported (format checked, not ISO membership). NULL when missing.
+        data_tests:
+          - dbt_utils.expression_is_true:
+              arguments:
+                expression: "~ '^[A-Z]{2}$'"
+      - name: created_at
+        description: NULL when the export value is after the cutoff or after the first subscription (see created_at_raw).
+
+  - name: base_subscriptions
+    description: Every distinct raw subscription, typed and classified. Internal.
+
+  - name: stg_subscriptions
+    description: >
+      Usable subscriptions. Rejected rows are in rej_subscriptions. end_date is NULL
+      when the export had it before start_date (end_date_raw keeps it). A subscription
+      whose customer is missing from the export is kept: its invoices count in MRR but
+      cannot be attributed to a customer in LTV.
+    columns:
+      - name: subscription_id
+        description: Billing system key (S00001 ...).
+        data_tests: [unique, not_null]
+      - name: customer_id
+        data_tests: [not_null]
+      - name: plan_name
+        description: starter, growth or scale.
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [starter, growth, scale]
+      - name: monthly_price
+        description: Contractual monthly price. The export has no currency; assumed EUR.
+        data_tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+                inclusive: false
+      - name: start_date
+        data_tests: [not_null]
+      - name: end_date
+        description: Trusted cancellation date. NULL while running or when the export was inconsistent.
+      - name: status
+        description: Exported status, lower-cased.
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [active, paused, cancelled]
+      - name: subscription_state
+        description: >
+          Status at the cutoff: active, paused, cancelled, pending (starts later) or
+          pending_cancellation (cancelled for a date after the cutoff, still running).
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [active, paused, cancelled, pending, pending_cancellation]
+
+  - name: base_invoices
+    description: Every raw invoice, typed and classified. Internal.
+
+  - name: stg_invoices
+    description: >
+      Usable invoices with the amount converted to EUR (vars.fx_rates_to_eur).
+      Rejected rows are in rej_invoices.
+    columns:
+      - name: invoice_id
+        description: Billing system key (I000001 ...).
+        data_tests: [unique, not_null]
+      - name: subscription_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_subscriptions')
+                field: subscription_id
+      - name: invoice_date
+        data_tests: [not_null]
+      - name: invoice_month
+        description: First day of the invoice month.
+        data_tests: [not_null]
+      - name: amount
+        description: Amount in the invoice currency.
+        data_tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+                inclusive: false
+      - name: currency
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [EUR, SEK]
+      - name: amount_eur
+        description: amount converted with vars.fx_rates_to_eur, rounded to cents.
+        data_tests: [not_null]
+      - name: status
+        description: paid, failed or open.
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [paid, failed, open]
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [subscription_id, invoice_month]
+
+unit_tests:
+  - name: subscription_state_at_cutoff
+    description: Every branch of subscription_state and the end_date trust rule, cutoff 2026-07-28.
+    model: stg_subscriptions
+    overrides:
+      vars: {as_of_date: "2026-07-28"}
+    given:
+      - input: ref('base_subscriptions')
+        rows:
+          - {subscription_id: running,     start_date: 2026-01-01, end_date_raw: null,       status: active,    reject_reason: null}
+          - {subscription_id: future,      start_date: 2026-08-01, end_date_raw: null,       status: active,    reject_reason: null}
+          - {subscription_id: scheduled,   start_date: 2026-01-01, end_date_raw: 2026-09-01, status: cancelled, reject_reason: null}
+          - {subscription_id: churned,     start_date: 2026-01-01, end_date_raw: 2026-06-01, status: cancelled, reject_reason: null}
+          - {subscription_id: inverted,    start_date: 2026-03-01, end_date_raw: 2026-02-01, status: cancelled, reject_reason: null}
+          - {subscription_id: rejected,    start_date: 2026-01-01, end_date_raw: null,       status: active,    reject_reason: unknown_plan}
+    expect:
+      rows:
+        - {subscription_id: running,   end_date: null,       subscription_state: active}
+        - {subscription_id: future,    end_date: null,       subscription_state: pending}
+        - {subscription_id: scheduled, end_date: 2026-09-01, subscription_state: pending_cancellation}
+        - {subscription_id: churned,   end_date: 2026-06-01, subscription_state: cancelled}
+        - {subscription_id: inverted,  end_date: null,       subscription_state: cancelled}

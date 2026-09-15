@@ -1,15 +1,12 @@
 """Load the billing CSV exports into MySQL, standing in for the source system."""
-import os
 from pathlib import Path
 
 import pandas as pd
 from sqlalchemy import create_engine
 
+from settings import MYSQL_URL
+
 DATA_DIR = Path(__file__).resolve().parents[1] / "data"
-MYSQL_URL = os.environ.get(
-    "NORDSTACK_MYSQL_URL",
-    "mysql+pymysql://billing_user:billing_password@127.0.0.1:3306/billing",
-)
 
 
 def main() -> None:

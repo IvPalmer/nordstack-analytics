@@ -1,0 +1,117 @@
+version: 2
+
+# Source diagnostics are WARN on purpose: they document the export's defects,
+# which base_* models then handle. Anything unhandled fails downstream at ERROR.
+sources:
+  - name: raw
+    description: Billing tables synced from MySQL by dlt (ingestion/sync_to_warehouse.py).
+    schema: raw
+    tables:
+      - name: raw_customers
+        columns:
+          - name: customer_id
+            data_tests:
+              - not_null:
+                  config: {severity: warn}
+              - unique:
+                  config: {severity: warn}
+          - name: email
+            data_tests:
+              - valid_email:
+                  config: {severity: warn}
+          - name: country
+            data_tests:
+              - not_null:
+                  config: {severity: warn}
+          - name: created_at
+            data_tests:
+              - not_null:
+                  config: {severity: warn}
+
+      - name: raw_subscriptions
+        data_tests:
+          - dbt_utils.expression_is_true:
+              name: raw_subscriptions_monthly_price_positive
+              arguments:
+                expression: "cast(monthly_price as numeric) > 0"
+              config: {severity: warn}
+        columns:
+          - name: subscription_id
+            data_tests:
+              - not_null:
+                  config: {severity: warn}
+              - unique:
+                  config: {severity: warn}
+          - name: customer_id
+            data_tests:
+              - not_null:
+                  config: {severity: warn}
+              - relationships:
+                  arguments:
+                    to: source('raw', 'raw_customers')
+                    field: customer_id
+                  config: {severity: warn}
+          - name: plan_name
+            data_tests:
+              - accepted_values:
+                  arguments:
+                    values: [starter, growth, scale]
+                  config: {severity: warn}
+          - name: monthly_price
+            data_tests:
+              - not_null:
+                  config: {severity: warn}
+          - name: start_date
+            data_tests:
+              - not_null:
+                  config: {severity: warn}
+          - name: status
+            data_tests:
+              - accepted_values:
+                  arguments:
+                    values: [active, paused, cancelled]
+                  config: {severity: warn}
+
+      - name: raw_invoices
+        data_tests:
+          - dbt_utils.expression_is_true:
+              name: raw_invoices_amount_positive
+              arguments:
+                expression: "cast(amount as numeric) > 0"
+              config: {severity: warn}
+        columns:
+          - name: invoice_id
+            data_tests:
+              - not_null:
+                  config: {severity: warn}
+              - unique:
+                  config: {severity: warn}
+          - name: subscription_id
+            data_tests:
+              - not_null:
+                  config: {severity: warn}
+              - relationships:
+                  arguments:
+                    to: source('raw', 'raw_subscriptions')
+                    field: subscription_id
+                  config: {severity: warn}
+          - name: invoice_date
+            data_tests:
+              - not_null:
+                  config: {severity: warn}
+          - name: amount
+            data_tests:
+              - not_null:
+                  config: {severity: warn}
+          - name: currency
+            data_tests:
+              - accepted_values:
+                  arguments:
+                    values: [EUR]
+                  config: {severity: warn}
+          - name: status
+            data_tests:
+              - accepted_values:
+                  arguments:
+                    values: [paid, failed, open]
+                  config: {severity: warn}

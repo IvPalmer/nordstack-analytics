@@ -1,0 +1,13 @@
+version: 2
+
+models:
+  - name: int_paid_invoices
+    description: Paid invoices in EUR on or before the cutoff, with plan and customer.
+    columns:
+      - name: invoice_id
+        data_tests: [unique, not_null]
+  - name: int_month_spine
+    description: Calendar months from the earliest subscription or invoice month to the cutoff month.
+    columns:
+      - name: month_start
+        data_tests: [unique, not_null]
