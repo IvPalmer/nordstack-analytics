@@ -131,9 +131,9 @@ unit_tests:
           - {customer_id: C2, subscription_id: S4, plan_name: scale,   start_date: 2025-02-01, subscription_state: pending_cancellation}
       - input: ref('int_paid_invoices')
         rows:
-          - {customer_id: C1, invoice_id: I1, amount_eur: 99.00}
-          - {customer_id: C1, invoice_id: I2, amount_eur: 29.00}
-          - {customer_id: C2, invoice_id: I3, amount_eur: 299.00}
+          - {customer_id: C1, invoice_id: I1, amount_eur: "99.00"}
+          - {customer_id: C1, invoice_id: I2, amount_eur: "29.00"}
+          - {customer_id: C2, invoice_id: I3, amount_eur: "299.00"}
       - input: ref('rej_subscriptions')
         rows: []
       - input: ref('rej_invoices')
@@ -142,8 +142,8 @@ unit_tests:
         rows: []
     expect:
       rows:
-        - {customer_id: C1, current_status: active,               current_plans: growth, plans_ever: "growth, starter", lifetime_paid_eur: 128.00, paid_invoices: 2}
-        - {customer_id: C2, current_status: pending_cancellation, current_plans: scale,  plans_ever: scale,             lifetime_paid_eur: 299.00, paid_invoices: 1}
+        - {customer_id: C1, current_status: active,               current_plans: growth, plans_ever: "growth, starter", lifetime_paid_eur: "128.00", paid_invoices: 2}
+        - {customer_id: C2, current_status: pending_cancellation, current_plans: scale,  plans_ever: scale,             lifetime_paid_eur: "299.00", paid_invoices: 1}
         - {customer_id: C3, current_status: no_eligible_subscription, current_plans: null, plans_ever: null,            lifetime_paid_eur: 0,      paid_invoices: 0}
 
   - name: churn_by_month
@@ -161,11 +161,11 @@ unit_tests:
           - {month_start: 2026-07-01}
       - input: ref('stg_subscriptions')
         rows:
-          - {subscription_id: may_a,        status: cancelled, end_date: 2026-05-15, monthly_price: 29.00}
-          - {subscription_id: may_b,        status: cancelled, end_date: 2026-05-20, monthly_price: 99.00}
-          - {subscription_id: after_cutoff, status: cancelled, end_date: 2026-07-29, monthly_price: 299.00}
-          - {subscription_id: untrusted,    status: cancelled, end_date: null,       monthly_price: 299.00}
-          - {subscription_id: not_churn,    status: paused,    end_date: 2026-06-10, monthly_price: 29.00}
+          - {subscription_id: may_a,        status: cancelled, end_date: 2026-05-15, monthly_price: "29.00"}
+          - {subscription_id: may_b,        status: cancelled, end_date: 2026-05-20, monthly_price: "99.00"}
+          - {subscription_id: after_cutoff, status: cancelled, end_date: 2026-07-29, monthly_price: "299.00"}
+          - {subscription_id: untrusted,    status: cancelled, end_date: null,       monthly_price: "299.00"}
+          - {subscription_id: not_churn,    status: paused,    end_date: 2026-06-10, monthly_price: "29.00"}
     expect:
       rows:
         - {churn_month: 2026-05-01, churned_subscriptions: 2, churned_mrr_eur: "128.00"}
@@ -186,10 +186,10 @@ unit_tests:
           - {subscription_id: S2, plan_name: growth}
       - input: ref('int_paid_invoices')
         rows:
-          - {invoice_id: I1, subscription_id: S1, plan_name: starter, invoice_month: 2026-06-01, amount_eur: 29.00}
-          - {invoice_id: I2, subscription_id: S1, plan_name: starter, invoice_month: 2026-07-01, amount_eur: 29.00}
-          - {invoice_id: I3, subscription_id: S2, plan_name: growth,  invoice_month: 2026-07-01, amount_eur: 99.00}
-          - {invoice_id: I4, subscription_id: S2, plan_name: growth,  invoice_month: 2026-07-01, amount_eur: 99.00}
+          - {invoice_id: I1, subscription_id: S1, plan_name: starter, invoice_month: 2026-06-01, amount_eur: "29.00"}
+          - {invoice_id: I2, subscription_id: S1, plan_name: starter, invoice_month: 2026-07-01, amount_eur: "29.00"}
+          - {invoice_id: I3, subscription_id: S2, plan_name: growth,  invoice_month: 2026-07-01, amount_eur: "99.00"}
+          - {invoice_id: I4, subscription_id: S2, plan_name: growth,  invoice_month: 2026-07-01, amount_eur: "99.00"}
     expect:
       rows:
         - {revenue_month: 2026-06-01, plan_name: growth,  mrr_eur: 0,        paid_invoices: 0, paying_subscriptions: 0}
