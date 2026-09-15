@@ -18,7 +18,11 @@ from airflow.sdk import DAG
 PROJECT_DIR = os.environ.get("NORDSTACK_PROJECT_DIR", "/opt/airflow/nordstack-analytics")
 PYTHON = os.environ.get("NORDSTACK_PYTHON", "python")
 DBT = os.environ.get("NORDSTACK_DBT", "dbt")
-ALERT_EMAILS = [a.strip() for a in os.environ.get("NORDSTACK_ALERT_EMAILS", "data-alerts@example.com").split(",") if a.strip()]
+ALERT_EMAILS = [
+    address.strip()
+    for address in os.environ.get("NORDSTACK_ALERT_EMAILS", "data-alerts@example.com").split(",")
+    if address.strip()
+]
 
 
 def notify(outcome: str):

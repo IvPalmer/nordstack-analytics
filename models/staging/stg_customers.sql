@@ -17,14 +17,29 @@ typed as (
         cast(nullif(trim(created_at), '') as date)      as created_at_parsed
     from deduplicated
 
+),
+
+first_subscription as (
+
+    select customer_id, min(start_date) as first_start_date
+    from {{ ref('base_subscriptions') }}
+    group by 1
+
 )
 
 select
-    customer_id,
-    customer_name,
-    case when email_raw ~ '{{ email_regex() }}' then email_raw end                  as email,
-    email_raw,
-    country,
-    case when created_at_parsed <= {{ as_of_date() }} then created_at_parsed end    as created_at,
-    created_at_raw
-from typed
+    t.customer_id,
+    t.customer_name,
+    case when t.email_raw ~ '{{ email_regex() }}' then t.email_raw end  as email,
+    t.email_raw,
+    t.country,
+    -- A creation date is trusted only if it is not in the future and not after
+    -- the customer's first subscription.
+    case
+        when t.created_at_parsed <= {{ as_of_date() }}
+         and t.created_at_parsed <= coalesce(f.first_start_date, t.created_at_parsed)
+        then t.created_at_parsed
+    end                                                                 as created_at,
+    t.created_at_raw
+from typed t
+left join first_subscription f on f.customer_id = t.customer_id

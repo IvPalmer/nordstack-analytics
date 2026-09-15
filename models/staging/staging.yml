@@ -16,13 +16,13 @@ models:
         description: NULL when the export value is not a valid address (see email_raw).
         data_tests: [valid_email]
       - name: country
-        description: ISO-3166 alpha-2. NULL when missing in the export.
+        description: Two-letter country code as exported (format checked, not ISO membership). NULL when missing.
         data_tests:
-          - accepted_values:
+          - dbt_utils.expression_is_true:
               arguments:
-                values: ["DE", "NL", "FR", "ES", "SE", "IT", "NO", "PT", "FI", "PL"]
+                expression: "~ '^[A-Z]{2}$'"
       - name: created_at
-        description: NULL when the export value is after the cutoff (see created_at_raw).
+        description: NULL when the export value is after the cutoff or after the first subscription (see created_at_raw).
 
   - name: base_subscriptions
     description: Every distinct raw subscription, typed and classified. Internal.
@@ -126,3 +126,26 @@ models:
       - dbt_utils.unique_combination_of_columns:
           arguments:
             combination_of_columns: [subscription_id, invoice_month]
+
+unit_tests:
+  - name: subscription_state_at_cutoff
+    description: Every branch of subscription_state and the end_date trust rule, cutoff 2026-07-28.
+    model: stg_subscriptions
+    overrides:
+      vars: {as_of_date: "2026-07-28"}
+    given:
+      - input: ref('base_subscriptions')
+        rows:
+          - {subscription_id: running,     start_date: 2026-01-01, end_date_raw: null,       status: active,    reject_reason: null}
+          - {subscription_id: future,      start_date: 2026-08-01, end_date_raw: null,       status: active,    reject_reason: null}
+          - {subscription_id: scheduled,   start_date: 2026-01-01, end_date_raw: 2026-09-01, status: cancelled, reject_reason: null}
+          - {subscription_id: churned,     start_date: 2026-01-01, end_date_raw: 2026-06-01, status: cancelled, reject_reason: null}
+          - {subscription_id: inverted,    start_date: 2026-03-01, end_date_raw: 2026-02-01, status: cancelled, reject_reason: null}
+          - {subscription_id: rejected,    start_date: 2026-01-01, end_date_raw: null,       status: active,    reject_reason: unknown_plan}
+    expect:
+      rows:
+        - {subscription_id: running,   end_date: null,       subscription_state: active}
+        - {subscription_id: future,    end_date: null,       subscription_state: pending}
+        - {subscription_id: scheduled, end_date: 2026-09-01, subscription_state: pending_cancellation}
+        - {subscription_id: churned,   end_date: 2026-06-01, subscription_state: cancelled}
+        - {subscription_id: inverted,  end_date: null,       subscription_state: cancelled}

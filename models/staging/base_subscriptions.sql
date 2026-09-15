@@ -25,9 +25,11 @@ select
     -- not a reason to reject: the invoices are real money. Those cases are kept,
     -- with end_date nulled in stg_subscriptions and no customer attribution in LTV.
     case
-        when plan_name not in ('starter', 'growth', 'scale')    then 'unknown_plan'
+        when plan_name is null
+             or plan_name not in ('starter', 'growth', 'scale') then 'unknown_plan'
         when monthly_price is null or monthly_price <= 0        then 'non_positive_price'
         when start_date is null                                 then 'missing_start_date'
-        when status not in ('active', 'paused', 'cancelled')    then 'unknown_status'
+        when status is null
+             or status not in ('active', 'paused', 'cancelled') then 'unknown_status'
     end                                                         as reject_reason
 from typed

@@ -3,7 +3,8 @@
 `dags/nordstack_billing.py`: `dlt_sync >> dbt_build` every 5 minutes, email on success
 and on failure through DAG-level callbacks (SMTP provider).
 
-Worker assumptions:
+Environment for the DAG processor and the workers (the DAG reads these at parse time,
+the tasks at run time):
 
 - this repository at `NORDSTACK_PROJECT_DIR`, with its venv's `python` and `dbt` as
   `NORDSTACK_PYTHON` / `NORDSTACK_DBT`, and `dbt deps` run at deploy time;

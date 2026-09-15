@@ -21,7 +21,8 @@ classified as (
             when typed.amount is null                           then 'missing_amount'
             when typed.amount <= 0                              then 'non_positive_amount'
             when {{ fx_rate_to_eur('typed.currency') }} is null then 'unsupported_currency'
-            when typed.status not in ('paid', 'failed', 'open') then 'unknown_status'
+            when typed.status is null
+                 or typed.status not in ('paid', 'failed', 'open') then 'unknown_status'
             when sub.subscription_id is null                    then 'unknown_subscription'
             when sub.reject_reason is not null                  then 'rejected_subscription'
         end                                                 as reject_reason
