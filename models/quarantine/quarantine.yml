@@ -2,7 +2,7 @@ version: 2
 
 models:
   - name: rej_subscriptions
-    description: Subscriptions excluded from every mart, with the first rule they broke.
+    description: Subscriptions excluded from every mart, with the first failed validation rule.
     columns:
       - name: subscription_id
         data_tests: [not_null]
@@ -14,7 +14,7 @@ models:
                 values: [unknown_plan, non_positive_price, missing_start_date, unknown_status]
 
   - name: rej_invoices
-    description: Invoices excluded from every mart, with the first rule they broke.
+    description: Invoices excluded from every mart, with the first failed validation rule.
     columns:
       - name: invoice_id
         data_tests: [not_null]

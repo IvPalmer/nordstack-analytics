@@ -1,7 +1,7 @@
 version: 2
 
 # Source diagnostics are WARN on purpose: they document the export's defects,
-# which base_* models then handle. Anything unhandled fails downstream at ERROR.
+# which the base_* and stg_* models then handle. Downstream tests use ERROR.
 sources:
   - name: raw
     description: Billing tables synced from MySQL by dlt (ingestion/sync_to_warehouse.py).

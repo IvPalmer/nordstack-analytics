@@ -12,7 +12,7 @@ DATA_DIR = Path(__file__).resolve().parents[1] / "data"
 def main() -> None:
     engine = create_engine(MYSQL_URL)
     for csv_path in sorted(DATA_DIR.glob("raw_*.csv")):
-        # Blank cells become NULL, as the source database would store them.
+        # Empty CSV cells are loaded as SQL NULL.
         frame = pd.read_csv(csv_path, dtype=str, keep_default_na=False).replace("", None)
         frame.to_sql(csv_path.stem, engine, if_exists="replace", index=False)
         print(f"{csv_path.stem}: {len(frame)} rows")
