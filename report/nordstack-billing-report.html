@@ -1,0 +1,392 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NordStack billing analytics</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Lato:wght@400;700;900&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --navy: #0c3860;
+    --navy-2: #1c4c75;
+    --teal: #0ba884;
+    --plane: #f5f6f8;
+    --surface: #ffffff;
+    --ink: #14212c;
+    --ink-2: #44596c;
+    --ink-3: #5a6f82;
+    --line: #e1e6ec;
+    --line-2: #cfd7df;
+    --s-scale: #2f6fb3;
+    --s-growth: #0ba884;
+    --s-starter: #c98500;
+    --st-active: #0ba884;
+    --st-pending-cancellation: #7fc9b3;
+    --st-paused: #c98500;
+    --st-pending: #9db4c8;
+    --st-cancelled: #b9c3cc;
+    --st-none: #e1e6ec;
+    --font: "Lato", -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html { color-scheme: light; }
+  body { margin: 0; background: var(--plane); color: var(--ink); font: 16px/1.55 var(--font); -webkit-font-smoothing: antialiased; }
+  a { color: var(--navy-2); text-decoration-thickness: 1px; text-underline-offset: 3px; }
+  h1, h2, h3 { margin: 0; line-height: 1.15; letter-spacing: -0.01em; }
+  h1 { font-size: 2rem; font-weight: 900; }
+  h2 { font-size: 1.35rem; font-weight: 700; margin-top: 3.5rem; margin-bottom: 1rem; }
+  p { margin: 0 0 1rem; max-width: 68ch; }
+  .num { font-variant-numeric: tabular-nums; }
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 0 24px; }
+
+  .band { background: var(--navy); color: #fff; }
+  .band .wrap { display: grid; grid-template-columns: 1fr auto; gap: 2rem; align-items: end; padding-top: 44px; padding-bottom: 40px; }
+  .band .sub { color: #b9cde0; margin: 0.6rem 0 0; font-size: 1rem; max-width: none; }
+  .band .meta { text-align: right; color: #b9cde0; font-size: 0.875rem; line-height: 1.7; }
+  .band .meta strong { color: #fff; font-weight: 700; display: block; }
+  .band .stamp { display: inline-block; margin-top: 0.4rem; padding: 3px 10px; border: 1px solid #3a6389; border-radius: 999px; font-size: 0.75rem; letter-spacing: 0.04em; color: #d7e5f2; }
+
+  .lede { display: grid; grid-template-columns: 7fr 4fr; gap: 4rem; margin-top: 3rem; align-items: start; }
+  .lede p { font-size: 1.1875rem; line-height: 1.6; color: var(--ink); max-width: 60ch; }
+  .lede p strong { font-weight: 700; }
+  .lede .side { border-top: 2px solid var(--navy); }
+  .lede .side dl { margin: 0; }
+  .lede .side dl > div { display: grid; grid-template-columns: 1fr auto; align-items: baseline; gap: 1rem; padding: 0.75rem 0; border-bottom: 1px solid var(--line-2); }
+  dt { font-size: 0.9375rem; color: var(--ink-2); }
+  dt small { display: block; font-size: 0.8125rem; color: var(--ink-3); }
+  dd { margin: 0; font-size: 1.75rem; font-weight: 900; color: var(--navy); letter-spacing: -0.02em; }
+
+  figure { margin: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 18px 20px 10px; position: relative; }
+  figure header { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; flex-wrap: wrap; margin-bottom: 0.75rem; }
+  figure h3 { font-size: 0.9375rem; font-weight: 700; }
+  figure .hint { font-size: 0.8125rem; color: var(--ink-3); }
+  .legend { display: flex; gap: 1.1rem; font-size: 0.8125rem; color: var(--ink-2); }
+  .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; }
+  .chart { position: relative; }
+  svg { display: block; overflow: visible; }
+  svg text { font-family: var(--font); fill: var(--ink-2); font-size: 12px; }
+  svg text.axis-lbl { font-size: 11px; fill: var(--ink-3); }
+  svg .grid { stroke: var(--line); }
+  svg .axis { stroke: var(--line-2); }
+  svg .bar { transition: opacity 120ms ease-out; }
+  svg g.col:hover .bar { opacity: 0.8; }
+  svg .lbl { fill: var(--ink); font-weight: 700; }
+  .tip { position: absolute; pointer-events: none; background: var(--ink); color: #fff; font-size: 0.8125rem; line-height: 1.4; padding: 8px 10px; border-radius: 6px; box-shadow: 0 8px 20px -8px rgba(0,0,0,0.4); opacity: 0; transform: translateY(4px); transition: opacity 120ms ease-out, transform 120ms ease-out; white-space: nowrap; z-index: 2; }
+  .tip.on { opacity: 1; transform: none; }
+  .tip b { font-weight: 700; }
+  .tip span { color: #b9cde0; }
+  details { margin-top: 8px; }
+  summary { font-size: 0.8125rem; color: var(--ink-3); cursor: pointer; }
+  summary:hover { color: var(--navy-2); }
+
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem; align-items: stretch; margin-top: 1.25rem; }
+  .two figure { display: flex; flex-direction: column; }
+  .two figure .chart { flex: 1; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font-size: 0.75rem; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink-3); font-weight: 700; border-bottom: 1px solid var(--line-2); }
+  td.r, th.r { text-align: right; }
+  tbody tr:hover td { background: #f9fafc; }
+  .mono { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 0.8125rem; color: var(--navy-2); }
+  .tag { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 0.75rem; font-weight: 700; background: #e6f4ef; color: #0a7a60; }
+  .tag.q { background: #fdf1dc; color: #8a5a00; }
+  .tag.k { background: #e6eef6; color: var(--navy-2); }
+
+  .flow { display: grid; grid-template-columns: repeat(5, 1fr); gap: 0; margin: 0.5rem 0 1.5rem; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); overflow: hidden; }
+  .flow > div { padding: 16px 18px; border-right: 1px solid var(--line); }
+  .flow > div:last-child { border-right: 0; }
+  .flow .k { font-size: 0.75rem; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink-3); }
+  .flow .v { font-size: 1.375rem; font-weight: 900; color: var(--navy); letter-spacing: -0.02em; margin-top: 2px; }
+  .flow .d { font-size: 0.8125rem; color: var(--ink-2); }
+
+  .status { display: flex; height: 16px; border-radius: 4px; overflow: hidden; gap: 2px; margin: 0.25rem 0 0.75rem; }
+  .status span { display: block; }
+  .status-legend { display: flex; flex-wrap: wrap; gap: 0.4rem 1.4rem; font-size: 0.8125rem; color: var(--ink-2); }
+  .status-note { font-size: 0.875rem; color: var(--ink-2); margin: 0.875rem 0 0.25rem; max-width: 90ch; }
+  .status-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; }
+
+  footer { margin: 4rem 0 3rem; padding-top: 1.5rem; border-top: 1px solid var(--line-2); color: var(--ink-2); font-size: 0.875rem; }
+  footer p { max-width: 80ch; }
+  code { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 0.85em; background: #eef2f6; padding: 1px 5px; border-radius: 4px; color: var(--navy-2); }
+
+  @media (max-width: 860px) {
+    h1 { font-size: 1.6rem; }
+    .band .wrap { grid-template-columns: 1fr; gap: 1rem; padding-top: 32px; padding-bottom: 28px; }
+    .band .meta { text-align: left; }
+    .lede, .two { grid-template-columns: 1fr; gap: 1.25rem; }
+    .flow { grid-template-columns: 1fr 1fr; }
+    .flow > div { border-bottom: 1px solid var(--line); }
+    .flow > div:nth-child(2n) { border-right: 0; }
+    .flow > div:last-child { grid-column: 1 / -1; border-bottom: 0; }
+    .tip { display: none; }
+    .tbl { overflow-x: auto; }
+    .findings thead { display: none; }
+    .findings tr { display: grid; gap: 2px; padding: 10px 0; border-bottom: 1px solid var(--line); }
+    .findings td { border: 0; padding: 0; }
+    .findings td:first-child { font-weight: 700; }
+    .wide .chart { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  }
+  @media print {
+    body { background: #fff; }
+    figure { break-inside: avoid; }
+    .band { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    details { display: none; }
+  }
+</style>
+</head>
+<body>
+<!--
+THESIS: an executive reads one page and knows what NordStack earns, keeps and loses, and how far the numbers can be trusted; it refuses the dashboard-of-tiles arrangement in favour of one argument told in three charts and a quality ledger.
+OWN-WORLD: Pearl's navy band and teal accent on a cool light plane, Lato, hairline rules, rounded white figures with soft navy-tinted shadow; three validated series hues (navy-blue, teal, amber) reserved for the plans.
+STORY: revenue is billed and reconciled to the source; churn is contractual and dated; every defect in the export was caught, named and handled; the reader trusts the marts and can rebuild them with one command.
+FIRST VIEWPORT: navy band with title and provenance; below it a lede paragraph with the four figures that matter and, beside it, the three key numbers; then the MRR stacked chart at full width.
+FORM: a printed analytical note with live charts; position 1 of 1, brief-pinned (Pearl identity, exec-level, clean); no seed roll.
+FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, and DESIGN.md
+-->
+<header class="band">
+  <div class="wrap">
+    <div>
+      <h1>NordStack billing analytics</h1>
+      <p class="sub">Billed revenue, customer value and churn from three raw billing exports, rebuilt as a tested dbt layer.</p>
+    </div>
+    <div class="meta">
+      <strong>Raphael Palmer</strong>
+      Data Engineer take-home, prepared for Pearl<br>
+      Reporting cutoff 28 Jul 2026 · generated 16 Sep 2026
+      <br><span class="stamp">Synthetic dataset supplied with the assessment</span>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+  <section class="lede">
+    <div>
+      <p>NordStack billed <strong>€14,003 of MRR in July 2026</strong> across 107 paying subscriptions, after peaking at €15,484 in December 2025. The scale plan carries two thirds of lifetime revenue. Since January 2024, <strong>46 subscriptions have churned</strong>, taking €7,114 of contractual monthly value with them; half of that churn happened in the last twelve months.</p>
+      <p>Every figure on this page is reconciled back to the raw export: the 2,855 invoices were classified row by row, 9 were quarantined with a stated reason, and paid revenue in the source equals revenue in the marts plus revenue in quarantine, to the cent.</p>
+    </div>
+    <div class="side">
+      <dl>
+        <div><dt>Billed revenue to date<small>2,445 paid invoices</small></dt><dd class="num">€325,282</dd></div>
+        <div><dt>Customers<small>86 active at the cutoff</small></dt><dd class="num">120</dd></div>
+        <div><dt>Churned subscriptions<small>€7,114 contractual MRR lost</small></dt><dd class="num">46</dd></div>
+        <div><dt>MRR, July 2026<small>107 paying subscriptions</small></dt><dd class="num">€14,003</dd></div>
+      </dl>
+    </div>
+  </section>
+
+  <h2>Monthly recurring revenue, billed</h2>
+  <figure id="fig-mrr" class="wide">
+    <header>
+      <h3>Paid invoice amounts by month and plan, EUR</h3>
+      <div class="legend"><span><i style="background:var(--s-scale)"></i>scale €299</span><span><i style="background:var(--s-growth)"></i>growth €99</span><span><i style="background:var(--s-starter)"></i>starter €29</span></div>
+    </header>
+    <div class="chart"></div>
+    <div class="tip"></div>
+    <details><summary>Data table</summary><div class="tbl"></div></details>
+  </figure>
+
+  <h2>Customers</h2>
+  <figure id="fig-status">
+    <header><h3>120 customers by strongest subscription state at the cutoff</h3></header>
+    <div class="status"></div>
+    <div class="status-legend"></div>
+    <p class="status-note">A customer is <em>active</em> if any subscription is active. Four subscriptions are cancelled for a date after the cutoff and still billing, so their customers read as <em>pending cancellation</em>. Fourteen customers hold an older active subscription next to a newer cancelled one, which is why status is aggregated rather than read from the latest row.</p>
+  </figure>
+  <div class="two">
+    <figure id="fig-ltv">
+      <header><h3>Top ten customers by paid revenue, EUR</h3><span class="hint">24.6% of all revenue</span></header>
+      <div class="chart"></div>
+      <div class="tip"></div>
+      <details><summary>Data table</summary><div class="tbl"></div></details>
+    </figure>
+    <figure id="fig-country">
+      <header><h3>Revenue by country, EUR</h3><span class="hint">one customer has no country</span></header>
+      <div class="chart"></div>
+      <div class="tip"></div>
+    </figure>
+  </div>
+
+  <h2>Churn</h2>
+  <figure id="fig-churn" class="wide">
+    <header><h3>Subscriptions cancelled per month and contractual MRR lost, EUR</h3><span class="hint">Cancellations dated after the cutoff are excluded</span></header>
+    <div class="chart"></div>
+    <div class="tip"></div>
+    <details><summary>Data table</summary><div class="tbl"></div></details>
+  </figure>
+
+  <h2>What the export got wrong, and what was done about it</h2>
+  <div class="flow">
+    <div><div class="k">Raw rows</div><div class="v num">3,151</div><div class="d">121 customers · 175 subscriptions · 2,855 invoices</div></div>
+    <div><div class="k">Diagnostics</div><div class="v num">17 warnings</div><div class="d">one per planted defect, kept warning on purpose</div></div>
+    <div><div class="k">Collapsed</div><div class="v num">2</div><div class="d">exact duplicate rows</div></div>
+    <div><div class="k">Quarantined</div><div class="v num">10</div><div class="d">1 subscription · 9 invoices, each with a reason</div></div>
+    <div><div class="k">Usable</div><div class="v num">3,139</div><div class="d">120 · 173 · 2,846 rows into the marts, reconciled</div></div>
+  </div>
+  <div class="tbl">
+  <table class="findings">
+    <thead><tr><th>Issue in the export</th><th>Record</th><th>Handling</th></tr></thead>
+    <tbody>
+      <tr><td>Duplicate customer row</td><td class="mono">C0023</td><td><span class="tag k">collapsed</span></td></tr>
+      <tr><td>Invalid email address</td><td class="mono">C0016</td><td><span class="tag">kept</span> email nulled, raw value retained</td></tr>
+      <tr><td>Missing country</td><td class="mono">C0008</td><td><span class="tag">kept</span> null</td></tr>
+      <tr><td>Customer created in 2027, after its own subscription</td><td class="mono">C0041</td><td><span class="tag">kept</span> creation date nulled, raw value retained</td></tr>
+      <tr><td>Duplicate subscription row</td><td class="mono">S00006</td><td><span class="tag k">collapsed</span></td></tr>
+      <tr><td>Subscription pointing to a customer that does not exist</td><td class="mono">S00011</td><td><span class="tag">kept</span> revenue counts in MRR, not attributable in LTV</td></tr>
+      <tr><td>Status in upper case</td><td class="mono">S00026</td><td><span class="tag">kept</span> normalised</td></tr>
+      <tr><td>Negative monthly price and seven negative invoices</td><td class="mono">S00048</td><td><span class="tag q">quarantined</span> subscription and invoices</td></tr>
+      <tr><td>End date before start date, 17 invoices after it</td><td class="mono">S00034</td><td><span class="tag">kept</span> end date nulled; billed revenue counts, never counted as churn</td></tr>
+      <tr><td>Starts after the cutoff</td><td class="mono">S00149</td><td><span class="tag">kept</span> state pending</td></tr>
+      <tr><td>Cancelled for a date after the cutoff</td><td class="mono">S00020 S00070 S00139 S00167</td><td><span class="tag">kept</span> state pending cancellation, not churn</td></tr>
+      <tr><td>Invoice pointing to a subscription that does not exist</td><td class="mono">I000601</td><td><span class="tag q">quarantined</span></td></tr>
+      <tr><td>Paid invoice with no amount</td><td class="mono">I000322</td><td><span class="tag q">quarantined</span></td></tr>
+      <tr><td>Status with trailing space and upper case</td><td class="mono">I000451</td><td><span class="tag">kept</span> normalised</td></tr>
+      <tr><td>Two invoices in SEK</td><td class="mono">I000101 I000201</td><td><span class="tag">kept</span> converted at 0.087 EUR per SEK, a stated assumption</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <footer>
+    <p><strong>Definitions.</strong> MRR is billed: the sum of paid invoice amounts in the invoice month, converted to EUR. Lost MRR on churn is contractual: the monthly price of subscriptions whose cancellation date falls in the month, on or before the reporting cutoff. Customer lifetime value is paid revenue attributable to a customer record. The two revenue bases differ on purpose and are labelled where they appear.</p>
+    <p><strong>Reproduce.</strong> The repository rebuilds everything from a clean clone with <code>make bootstrap</code>: MySQL as the source system, dlt to Postgres, dbt models and tests (source diagnostics warn, everything downstream errors), and an Airflow DAG that reruns the chain every five minutes. This page was generated from the marts on 16 Sep 2026 with <code>make report</code>; the data is the synthetic set supplied with the assessment.</p>
+  </footer>
+</main>
+
+<script>
+const DATA = {"as_of":"2026-07-28","mrr":[{"m":"2024-01-01","p":"growth","eur":0,"inv":0,"subs":0},{"m":"2024-01-01","p":"scale","eur":0,"inv":0,"subs":0},{"m":"2024-01-01","p":"starter","eur":29.0,"inv":1,"subs":1},{"m":"2024-02-01","p":"growth","eur":495.0,"inv":5,"subs":5},{"m":"2024-02-01","p":"scale","eur":299.0,"inv":1,"subs":1},{"m":"2024-02-01","p":"starter","eur":116.0,"inv":4,"subs":4},{"m":"2024-03-01","p":"growth","eur":891.0,"inv":9,"subs":9},{"m":"2024-03-01","p":"scale","eur":598.0,"inv":2,"subs":2},{"m":"2024-03-01","p":"starter","eur":87.0,"inv":3,"subs":3},{"m":"2024-04-01","p":"growth","eur":1386.0,"inv":14,"subs":14},{"m":"2024-04-01","p":"scale","eur":1196.0,"inv":4,"subs":4},{"m":"2024-04-01","p":"starter","eur":261.0,"inv":9,"subs":9},{"m":"2024-05-01","p":"growth","eur":1089.0,"inv":11,"subs":11},{"m":"2024-05-01","p":"scale","eur":1495.0,"inv":5,"subs":5},{"m":"2024-05-01","p":"starter","eur":232.0,"inv":8,"subs":8},{"m":"2024-06-01","p":"growth","eur":1584.0,"inv":16,"subs":16},{"m":"2024-06-01","p":"scale","eur":2691.0,"inv":9,"subs":9},{"m":"2024-06-01","p":"starter","eur":406.0,"inv":14,"subs":14},{"m":"2024-07-01","p":"growth","eur":1584.0,"inv":16,"subs":16},{"m":"2024-07-01","p":"scale","eur":3588.0,"inv":12,"subs":12},{"m":"2024-07-01","p":"starter","eur":377.0,"inv":13,"subs":13},{"m":"2024-08-01","p":"growth","eur":1980.0,"inv":20,"subs":20},{"m":"2024-08-01","p":"scale","eur":4186.0,"inv":14,"subs":14},{"m":"2024-08-01","p":"starter","eur":290.0,"inv":10,"subs":10},{"m":"2024-09-01","p":"growth","eur":2277.0,"inv":23,"subs":23},{"m":"2024-09-01","p":"scale","eur":5382.0,"inv":18,"subs":18},{"m":"2024-09-01","p":"starter","eur":406.0,"inv":14,"subs":14},{"m":"2024-10-01","p":"growth","eur":2574.0,"inv":26,"subs":26},{"m":"2024-10-01","p":"scale","eur":6279.0,"inv":21,"subs":21},{"m":"2024-10-01","p":"starter","eur":464.0,"inv":16,"subs":16},{"m":"2024-11-01","p":"growth","eur":2376.0,"inv":24,"subs":24},{"m":"2024-11-01","p":"scale","eur":6279.0,"inv":21,"subs":21},{"m":"2024-11-01","p":"starter","eur":609.0,"inv":21,"subs":21},{"m":"2024-12-01","p":"growth","eur":3168.0,"inv":32,"subs":32},{"m":"2024-12-01","p":"scale","eur":6279.0,"inv":21,"subs":21},{"m":"2024-12-01","p":"starter","eur":725.0,"inv":25,"subs":25},{"m":"2025-01-01","p":"growth","eur":3168.0,"inv":32,"subs":32},{"m":"2025-01-01","p":"scale","eur":7475.0,"inv":25,"subs":25},{"m":"2025-01-01","p":"starter","eur":812.0,"inv":28,"subs":28},{"m":"2025-02-01","p":"growth","eur":2673.0,"inv":27,"subs":27},{"m":"2025-02-01","p":"scale","eur":8372.0,"inv":28,"subs":28},{"m":"2025-02-01","p":"starter","eur":812.0,"inv":28,"subs":28},{"m":"2025-03-01","p":"growth","eur":2871.0,"inv":29,"subs":29},{"m":"2025-03-01","p":"scale","eur":9269.0,"inv":31,"subs":31},{"m":"2025-03-01","p":"starter","eur":841.0,"inv":29,"subs":29},{"m":"2025-04-01","p":"growth","eur":3168.0,"inv":32,"subs":32},{"m":"2025-04-01","p":"scale","eur":7800.01,"inv":27,"subs":27},{"m":"2025-04-01","p":"starter","eur":928.0,"inv":32,"subs":32},{"m":"2025-05-01","p":"growth","eur":3366.0,"inv":34,"subs":34},{"m":"2025-05-01","p":"scale","eur":8073.0,"inv":27,"subs":27},{"m":"2025-05-01","p":"starter","eur":957.0,"inv":33,"subs":33},{"m":"2025-06-01","p":"growth","eur":3861.0,"inv":39,"subs":39},{"m":"2025-06-01","p":"scale","eur":8970.0,"inv":30,"subs":30},{"m":"2025-06-01","p":"starter","eur":928.0,"inv":32,"subs":32},{"m":"2025-07-01","p":"growth","eur":3762.0,"inv":38,"subs":38},{"m":"2025-07-01","p":"scale","eur":10166.0,"inv":34,"subs":34},{"m":"2025-07-01","p":"starter","eur":1073.0,"inv":37,"subs":37},{"m":"2025-08-01","p":"growth","eur":3861.0,"inv":39,"subs":39},{"m":"2025-08-01","p":"scale","eur":10166.0,"inv":34,"subs":34},{"m":"2025-08-01","p":"starter","eur":1044.0,"inv":36,"subs":36},{"m":"2025-09-01","p":"growth","eur":4158.0,"inv":42,"subs":42},{"m":"2025-09-01","p":"scale","eur":8671.0,"inv":29,"subs":29},{"m":"2025-09-01","p":"starter","eur":1218.0,"inv":42,"subs":42},{"m":"2025-10-01","p":"growth","eur":3960.0,"inv":40,"subs":40},{"m":"2025-10-01","p":"scale","eur":8372.0,"inv":28,"subs":28},{"m":"2025-10-01","p":"starter","eur":1160.0,"inv":40,"subs":40},{"m":"2025-11-01","p":"growth","eur":3861.0,"inv":39,"subs":39},{"m":"2025-11-01","p":"scale","eur":9568.0,"inv":32,"subs":32},{"m":"2025-11-01","p":"starter","eur":1189.0,"inv":41,"subs":41},{"m":"2025-12-01","p":"growth","eur":4158.0,"inv":42,"subs":42},{"m":"2025-12-01","p":"scale","eur":10166.0,"inv":34,"subs":34},{"m":"2025-12-01","p":"starter","eur":1160.0,"inv":40,"subs":40},{"m":"2026-01-01","p":"growth","eur":3762.0,"inv":38,"subs":38},{"m":"2026-01-01","p":"scale","eur":10166.0,"inv":34,"subs":34},{"m":"2026-01-01","p":"starter","eur":986.0,"inv":34,"subs":34},{"m":"2026-02-01","p":"growth","eur":4059.0,"inv":41,"subs":41},{"m":"2026-02-01","p":"scale","eur":9269.0,"inv":31,"subs":31},{"m":"2026-02-01","p":"starter","eur":1276.0,"inv":44,"subs":44},{"m":"2026-03-01","p":"growth","eur":3861.0,"inv":39,"subs":39},{"m":"2026-03-01","p":"scale","eur":9867.0,"inv":33,"subs":33},{"m":"2026-03-01","p":"starter","eur":1305.0,"inv":45,"subs":45},{"m":"2026-04-01","p":"growth","eur":3663.0,"inv":37,"subs":37},{"m":"2026-04-01","p":"scale","eur":9269.0,"inv":31,"subs":31},{"m":"2026-04-01","p":"starter","eur":1102.0,"inv":38,"subs":38},{"m":"2026-05-01","p":"growth","eur":4158.0,"inv":42,"subs":42},{"m":"2026-05-01","p":"scale","eur":8671.0,"inv":29,"subs":29},{"m":"2026-05-01","p":"starter","eur":1160.0,"inv":40,"subs":40},{"m":"2026-06-01","p":"growth","eur":4059.0,"inv":41,"subs":41},{"m":"2026-06-01","p":"scale","eur":9867.0,"inv":33,"subs":33},{"m":"2026-06-01","p":"starter","eur":1044.0,"inv":36,"subs":36},{"m":"2026-07-01","p":"growth","eur":3960.0,"inv":40,"subs":40},{"m":"2026-07-01","p":"scale","eur":8970.0,"inv":30,"subs":30},{"m":"2026-07-01","p":"starter","eur":1073.0,"inv":37,"subs":37}],"churn":[{"m":"2024-01-01","n":0,"eur":0},{"m":"2024-02-01","n":0,"eur":0},{"m":"2024-03-01","n":0,"eur":0},{"m":"2024-04-01","n":0,"eur":0},{"m":"2024-05-01","n":0,"eur":0},{"m":"2024-06-01","n":1,"eur":99.0},{"m":"2024-07-01","n":1,"eur":299.0},{"m":"2024-08-01","n":1,"eur":29.0},{"m":"2024-09-01","n":0,"eur":0},{"m":"2024-10-01","n":0,"eur":0},{"m":"2024-11-01","n":2,"eur":328.0},{"m":"2024-12-01","n":3,"eur":227.0},{"m":"2025-01-01","n":4,"eur":526.0},{"m":"2025-02-01","n":2,"eur":128.0},{"m":"2025-03-01","n":1,"eur":299.0},{"m":"2025-04-01","n":1,"eur":299.0},{"m":"2025-05-01","n":2,"eur":58.0},{"m":"2025-06-01","n":1,"eur":299.0},{"m":"2025-07-01","n":3,"eur":697.0},{"m":"2025-08-01","n":1,"eur":299.0},{"m":"2025-09-01","n":4,"eur":526.0},{"m":"2025-10-01","n":5,"eur":695.0},{"m":"2025-11-01","n":1,"eur":299.0},{"m":"2025-12-01","n":3,"eur":157.0},{"m":"2026-01-01","n":0,"eur":0},{"m":"2026-02-01","n":1,"eur":299.0},{"m":"2026-03-01","n":3,"eur":697.0},{"m":"2026-04-01","n":3,"eur":627.0},{"m":"2026-05-01","n":2,"eur":128.0},{"m":"2026-06-01","n":1,"eur":99.0},{"m":"2026-07-01","n":0,"eur":0}],"ltv":[{"id":"C0038","name":"Aiden Meyer","country":"PL","status":"active","plans":"scale","current":"scale","eur":11362.0,"inv":38,"excl":false,"first":"2024-03-16"},{"id":"C0064","name":"Ines Silva","country":"PL","status":"active","plans":"scale","current":"scale","eur":8671.0,"inv":29,"excl":false,"first":"2024-11-04"},{"id":"C0082","name":"Felix Kowalski","country":"SE","status":"active","plans":"scale","current":"scale","eur":8073.0,"inv":27,"excl":false,"first":"2024-07-10"},{"id":"C0072","name":"Noah Santos","country":"DE","status":"active","plans":"growth, scale","current":"growth, scale","eur":7657.0,"inv":43,"excl":false,"first":"2024-02-17"},{"id":"C0041","name":"Olivia Weber","country":"SE","status":"active","plans":"scale","current":"scale","eur":7475.0,"inv":25,"excl":false,"first":"2024-06-24"},{"id":"C0053","name":"Jonas Costa","country":"DE","status":"active","plans":"growth, scale","current":"scale","eur":7360.0,"inv":40,"excl":false,"first":"2024-04-11"},{"id":"C0096","name":"Elias Costa","country":"NL","status":"active","plans":"scale","current":"scale","eur":7176.0,"inv":24,"excl":false,"first":"2024-08-12"},{"id":"C0031","name":"Clara Silva","country":"PT","status":"active","plans":"scale","current":"scale","eur":7176.0,"inv":24,"excl":false,"first":"2024-02-22"},{"id":"C0086","name":"Jonas Silva","country":"NL","status":"active","plans":"scale","current":"scale","eur":7176.0,"inv":24,"excl":false,"first":"2024-04-30"},{"id":"C0065","name":"Mateo Horvat","country":"PL","status":"active","plans":"growth, scale, starter","current":"scale, starter","eur":7162.0,"inv":48,"excl":false,"first":"2024-07-29"},{"id":"C0008","name":"Mateo Meyer","country":null,"status":"active","plans":"scale","current":"scale","eur":6877.0,"inv":23,"excl":false,"first":"2024-07-16"},{"id":"C0104","name":"Emma Muller","country":"FR","status":"paused","plans":"scale","current":null,"eur":6877.0,"inv":23,"excl":false,"first":"2024-07-21"},{"id":"C0005","name":"Aiden Berg","country":"PT","status":"active","plans":"scale","current":"scale","eur":6604.01,"inv":23,"excl":false,"first":"2024-09-04"},{"id":"C0080","name":"Lucas Laine","country":"FR","status":"active","plans":"scale, starter","current":"scale","eur":6290.0,"inv":40,"excl":false,"first":"2024-06-19"},{"id":"C0042","name":"Ava Weber","country":"PT","status":"active","plans":"scale","current":"scale","eur":6279.0,"inv":21,"excl":false,"first":"2024-07-23"},{"id":"C0077","name":"Emma Nilsson","country":"NO","status":"paused","plans":"scale","current":null,"eur":6279.0,"inv":21,"excl":false,"first":"2024-05-19"},{"id":"C0105","name":"Nora Silva","country":"NL","status":"active","plans":"scale","current":"scale","eur":5980.0,"inv":20,"excl":false,"first":"2024-06-12"},{"id":"C0052","name":"Nora Santos","country":"PL","status":"active","plans":"scale","current":"scale","eur":5980.0,"inv":20,"excl":false,"first":"2024-10-18"},{"id":"C0046","name":"Lena Muller","country":"DE","status":"active","plans":"scale","current":"scale","eur":5681.0,"inv":19,"excl":false,"first":"2024-09-25"},{"id":"C0058","name":"Ava Costa","country":"FI","status":"active","plans":"scale, starter","current":"scale, starter","eur":5373.0,"inv":27,"excl":false,"first":"2024-12-06"},{"id":"C0114","name":"Felix Rossi","country":"DE","status":"active","plans":"scale, starter","current":"scale, starter","eur":5228.0,"inv":22,"excl":false,"first":"2025-03-19"},{"id":"C0120","name":"Hugo Moreau","country":"NO","status":"active","plans":"scale","current":"scale","eur":4784.0,"inv":16,"excl":false,"first":"2025-01-11"},{"id":"C0116","name":"Ines Horvat","country":"NL","status":"active","plans":"scale","current":"scale","eur":4784.0,"inv":16,"excl":false,"first":"2025-01-01"},{"id":"C0102","name":"Mila Jansen","country":"FR","status":"active","plans":"scale","current":"scale","eur":4485.0,"inv":15,"excl":false,"first":"2025-01-01"},{"id":"C0071","name":"Aiden Jansen","country":"DE","status":"paused","plans":"scale","current":null,"eur":4485.0,"inv":15,"excl":false,"first":"2025-03-17"}],"status":{"active":86,"pending_cancellation":2,"paused":9,"cancelled":22,"no_eligible_subscription":1},"country":[{"c":"DE","n":22,"eur":57433.0},{"c":"NL","n":16,"eur":41115.0},{"c":"PL","n":7,"eur":34741.0},{"c":"PT","n":10,"eur":33946.01},{"c":"SE","n":11,"eur":33048.0},{"c":"FR","n":12,"eur":31338.0},{"c":"NO","n":11,"eur":28278.0},{"c":"IT","n":11,"eur":23116.0},{"c":"FI","n":8,"eur":17371.0},{"c":"ES","n":11,"eur":15627.0},{"c":"??","n":1,"eur":6877.0}],"rej":[{"id":"I000322","reason":"missing_amount"},{"id":"I000725","reason":"non_positive_amount"},{"id":"I000726","reason":"non_positive_amount"},{"id":"I000727","reason":"non_positive_amount"},{"id":"I000728","reason":"non_positive_amount"},{"id":"I000729","reason":"non_positive_amount"},{"id":"I000730","reason":"non_positive_amount"},{"id":"I000731","reason":"non_positive_amount"},{"id":"S00048","reason":"non_positive_price"},{"id":"I000601","reason":"unknown_subscription"}]};
+const fmt = new Intl.NumberFormat('en-GB', { maximumFractionDigits: 0 });
+const eur = v => '€' + fmt.format(Math.round(+v));
+const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const mlabel = m => { const [y, mo] = m.split('-'); return MONTHS[+mo - 1] + ' ' + y.slice(2); };
+const mlong = m => { const [y, mo] = m.split('-'); return MONTHS[+mo - 1] + ' ' + y; };
+const PLANS = ['scale', 'growth', 'starter'];
+const COLOR = { scale: 'var(--s-scale)', growth: 'var(--s-growth)', starter: 'var(--s-starter)' };
+const svgNS = 'http://www.w3.org/2000/svg';
+const el = (n, a = {}, t) => { const e = document.createElementNS(svgNS, n); for (const k in a) e.setAttribute(k, a[k]); if (t != null) e.textContent = t; return e; };
+const nice = max => { const p = Math.pow(10, Math.floor(Math.log10(max))); const step = [0.25, 0.4, 0.5, 1, 2, 2.5, 4, 5].map(x => x * p).find(st => max / st <= 5); return { step, top: Math.ceil(max / step) * step }; };
+
+// Charts are drawn in CSS pixels at the container's current width, so type stays
+// 12px at any viewport; a ResizeObserver redraws them when the width changes.
+function canvas(fig, height, minWidth = 0) {
+  const box = fig.querySelector('.chart');
+  box.innerHTML = '';
+  const W = Math.max(box.clientWidth, minWidth);
+  const svg = el('svg', { width: W, height, viewBox: `0 0 ${W} ${height}` });
+  box.appendChild(svg);
+  return { svg, W };
+}
+function tooltip(fig) {
+  const tip = fig.querySelector('.tip');
+  return {
+    show(html, x, y) { tip.innerHTML = html; tip.classList.add('on'); const r = fig.getBoundingClientRect(); const w = tip.offsetWidth; let left = x - r.left + 12; if (left + w > r.width - 8) left = x - r.left - w - 12; tip.style.left = left + 'px'; tip.style.top = (y - r.top - 40) + 'px'; },
+    hide() { tip.classList.remove('on'); }
+  };
+}
+function table(fig, head, rows) {
+  const box = fig.querySelector('.tbl'); if (!box || box.children.length) return;
+  const t = document.createElement('table');
+  t.innerHTML = '<thead><tr>' + head.map((h, i) => `<th${i ? ' class="r"' : ''}>${h}</th>`).join('') + '</tr></thead><tbody>' +
+    rows.map(r => '<tr>' + r.map((c, i) => `<td${i ? ' class="r num"' : ''}>${c}</td>`).join('') + '</tr>').join('') + '</tbody>';
+  box.appendChild(t);
+}
+function hbars(fig, rows, opts) {
+  const { svg, W } = canvas(fig, rows.length * opts.rh + 6);
+  const tip = tooltip(fig), max = Math.max(...rows.map(opts.value));
+  rows.forEach((r, i) => {
+    const y = 3 + i * opts.rh, w = Math.max(opts.value(r) / max * (W - opts.L - opts.R), 2);
+    const g = el('g', { class: 'col' });
+    g.appendChild(el('text', { x: opts.L - 10, y: y + opts.rh / 2 + 4, 'text-anchor': 'end', fill: 'var(--ink)' }, opts.label(r)));
+    g.appendChild(el('rect', { class: 'bar', x: opts.L, y: y + 4, width: w, height: opts.rh - 8, rx: 2, fill: opts.fill(r) }));
+    g.appendChild(el('text', { class: 'num', x: opts.L + w + 8, y: y + opts.rh / 2 + 4 }, eur(opts.value(r))));
+    g.appendChild(el('rect', { x: 0, y, width: W, height: opts.rh, fill: 'transparent' }));
+    g.addEventListener('mousemove', e => tip.show(opts.tip(r), e.clientX, e.clientY));
+    g.addEventListener('mouseleave', tip.hide);
+    svg.appendChild(g);
+  });
+}
+
+function mrr() {
+  const fig = document.getElementById('fig-mrr'), tip = tooltip(fig);
+  const months = [...new Set(DATA.mrr.map(r => r.m))];
+  const by = {}; DATA.mrr.forEach(r => { (by[r.m] ??= {})[r.p] = r; });
+  const totals = months.map(m => PLANS.reduce((s, p) => s + +by[m][p].eur, 0));
+  const { step, top } = nice(Math.max(...totals));
+  const { svg, W } = canvas(fig, 320, 720);
+  const L = 44, R = 8, T = 24, B = 28, iw = W - L - R, ih = 320 - T - B;
+  for (let v = 0; v <= top; v += step) { const y = T + ih - v / top * ih; svg.appendChild(el('line', { class: v ? 'grid' : 'axis', x1: L, x2: W - R, y1: y, y2: y })); svg.appendChild(el('text', { class: 'axis-lbl', x: L - 8, y: y + 4, 'text-anchor': 'end' }, v ? fmt.format(v / 1000) + 'k' : '0')); }
+  const slot = iw / months.length, bw = Math.min(slot * 0.7, 28), every = W < 640 ? 6 : 3;
+  months.forEach((m, i) => {
+    const g = el('g', { class: 'col' }); let y = T + ih; const x = L + i * slot + (slot - bw) / 2;
+    PLANS.forEach(p => { const v = +by[m][p].eur; if (!v) return; const h = v / top * ih; y -= h; g.appendChild(el('rect', { class: 'bar', x, y: y + 1, width: bw, height: Math.max(h - 2, 0), rx: 2, fill: COLOR[p] })); });
+    g.appendChild(el('rect', { x: L + i * slot, y: T, width: slot, height: ih, fill: 'transparent' }));
+    g.addEventListener('mousemove', e => tip.show(`<b>${mlong(m)}</b> · ${eur(totals[i])}<br>` + PLANS.map(p => `<span>${p}</span> ${eur(by[m][p].eur)} · ${by[m][p].subs} subs`).join('<br>'), e.clientX, e.clientY));
+    g.addEventListener('mouseleave', tip.hide);
+    if (i % every === 0) svg.appendChild(el('text', { class: 'axis-lbl', x: x + bw / 2, y: 320 - 8, 'text-anchor': 'middle' }, mlabel(m)));
+    svg.appendChild(g);
+  });
+  const pk = totals.indexOf(Math.max(...totals));
+  svg.appendChild(el('text', { class: 'lbl', x: L + pk * slot + slot / 2, y: T + ih - totals[pk] / top * ih - 7, 'text-anchor': 'middle' }, eur(totals[pk])));
+  table(fig, ['Month', 'scale', 'growth', 'starter', 'Total'], months.map((m, i) => [mlong(m), ...PLANS.map(p => eur(by[m][p].eur)), eur(totals[i])]));
+}
+
+function ltv() {
+  const fig = document.getElementById('fig-ltv');
+  hbars(fig, DATA.ltv.slice(0, 10), {
+    rh: 28, L: 96, R: 64,
+    value: r => +r.eur,
+    label: r => `${r.id} · ${r.country ?? '??'}`,
+    fill: r => (r.current || '').includes('scale') ? COLOR.scale : COLOR.growth,
+    tip: r => `<b>${r.name}</b> · ${r.id}<br><span>plans</span> ${r.plans} · <span>status</span> ${r.status.replace(/_/g, ' ')}<br><span>paid</span> ${eur(r.eur)} over ${r.inv} invoices since ${r.first}`
+  });
+  table(fig, ['Customer', 'Country', 'Plans', 'Status', 'Paid EUR'], DATA.ltv.slice(0, 25).map(r => [r.id + ' ' + r.name, r.country ?? '', r.plans ?? '', r.status.replace(/_/g, ' '), eur(r.eur)]));
+}
+
+function country() {
+  const fig = document.getElementById('fig-country');
+  hbars(fig, DATA.country.filter(r => r.c !== '??'), {
+    rh: 26, L: 40, R: 64,
+    value: r => +r.eur,
+    label: r => r.c,
+    fill: () => 'var(--navy-2)',
+    tip: r => `<b>${r.c}</b> · ${r.n} customers · ${eur(r.eur)} · ${eur(+r.eur / r.n)} per customer`
+  });
+}
+
+function status() {
+  const fig = document.getElementById('fig-status');
+  const order = ['active', 'pending_cancellation', 'paused', 'pending', 'cancelled', 'no_eligible_subscription'];
+  const label = { active: 'active', pending_cancellation: 'pending cancellation', paused: 'paused', pending: 'pending', cancelled: 'cancelled', no_eligible_subscription: 'no usable subscription' };
+  const color = { active: 'var(--st-active)', pending_cancellation: 'var(--st-pending-cancellation)', paused: 'var(--st-paused)', pending: 'var(--st-pending)', cancelled: 'var(--st-cancelled)', no_eligible_subscription: 'var(--st-none)' };
+  const bar = fig.querySelector('.status'), leg = fig.querySelector('.status-legend'); const total = Object.values(DATA.status).reduce((a, b) => a + b, 0);
+  order.forEach(k => { const n = DATA.status[k]; if (!n) return; const s = document.createElement('span'); s.style.width = (n / total * 100) + '%'; s.style.background = color[k]; s.title = `${label[k]}: ${n}`; bar.appendChild(s); const l = document.createElement('span'); l.innerHTML = `<i style="background:${color[k]}"></i>${label[k]} <b class="num">${n}</b>`; leg.appendChild(l); });
+}
+
+function churn() {
+  const fig = document.getElementById('fig-churn'), tip = tooltip(fig);
+  const rows = DATA.churn, top = 6, H = 210;
+  const { svg, W } = canvas(fig, H, 720);
+  const L = 32, R = 8, T = 22, B = 28, iw = W - L - R, ih = H - T - B;
+  for (let v = 0; v <= top; v += 2) { const y = T + ih - v / top * ih; svg.appendChild(el('line', { class: v ? 'grid' : 'axis', x1: L, x2: W - R, y1: y, y2: y })); svg.appendChild(el('text', { class: 'axis-lbl', x: L - 8, y: y + 4, 'text-anchor': 'end' }, v)); }
+  const slot = iw / rows.length, bw = Math.min(slot * 0.7, 28), every = W < 640 ? 6 : 3;
+  rows.forEach((r, i) => {
+    const x = L + i * slot + (slot - bw) / 2, h = r.n / top * ih, y = T + ih - h;
+    const g = el('g', { class: 'col' });
+    if (r.n) g.appendChild(el('rect', { class: 'bar', x, y, width: bw, height: h, rx: 2, fill: 'var(--navy-2)' }));
+    const prev = rows[i - 1], labelled = r.n >= 3 && !(prev && prev.n >= 3 && prev.n >= r.n);
+    if (labelled) g.appendChild(el('text', { class: 'num', x: x + bw / 2, y: y - 6, 'text-anchor': 'middle' }, `${r.n} · ${eur(r.eur)}`));
+    g.appendChild(el('rect', { x: L + i * slot, y: T, width: slot, height: ih, fill: 'transparent' }));
+    g.addEventListener('mousemove', e => tip.show(`<b>${mlong(r.m)}</b><br>${r.n} cancelled · ${eur(r.eur)} MRR lost`, e.clientX, e.clientY));
+    g.addEventListener('mouseleave', tip.hide);
+    if (i % every === 0) svg.appendChild(el('text', { class: 'axis-lbl', x: x + bw / 2, y: H - 8, 'text-anchor': 'middle' }, mlabel(r.m)));
+    svg.appendChild(g);
+  });
+  table(fig, ['Month', 'Cancelled', 'MRR lost'], rows.filter(r => r.n).map(r => [mlong(r.m), r.n, eur(r.eur)]));
+}
+
+function draw() { mrr(); ltv(); country(); churn(); }
+status(); draw();
+let raf; new ResizeObserver(() => { cancelAnimationFrame(raf); raf = requestAnimationFrame(draw); }).observe(document.querySelector('main'));
+</script>
+</body>
+</html>

@@ -1,31 +1,64 @@
-# NordStack analytics
+# NordStack billing analytics
 
-Billing exports -> MySQL (source system) -> dlt -> Postgres -> dbt -> Airflow.
+A tested analytics layer over three raw billing exports: MySQL as the source system,
+dlt into Postgres, dbt for the models and tests, Airflow to run it every five minutes,
+and a one-page report read straight from the marts.
 
-## Quick start
+![One-page report generated from the marts: billed MRR by plan, customer value, status at the cutoff](docs/report.png)
+
+## Results
+
+| | |
+|---|---|
+| Billed revenue to date | €325,282 over 2,445 paid invoices (Jan 2024 to Jul 2026) |
+| MRR, July 2026 | €14,003 across 107 paying subscriptions; peak €15,484 in Dec 2025 |
+| Customers | 120, of which 86 active at the cutoff |
+| Churn | 46 subscriptions, €7,114 of contractual MRR |
+| Data quality | 17 defects in the export caught by tests, 10 rows quarantined, 2 duplicates collapsed |
+| Reconciliation | paid revenue in the source = marts + quarantine, to the cent |
+
+Open [`report/nordstack-billing-report.html`](report/nordstack-billing-report.html) for the
+charts, or run `make docs` for the dbt documentation and lineage.
+
+## Run it
 
     make bootstrap
 
-Starts MySQL and Postgres, loads `data/*.csv` into MySQL, syncs them to Postgres with
-dlt, installs pinned dbt, runs `dbt build`. Ends with `ERROR=0` and 17 warnings, which
-are the source diagnostics described below. `make docs` serves the dbt documentation;
-`make airflow-test` parses the DAG. Requirements: Docker with Compose v2, Python 3.12,
-make. If port 5432 or 3306 is taken, copy `.env.example` to `.env` and change
-`NORDSTACK_PG_PORT` or `NORDSTACK_MYSQL_PORT`; compose, ingestion and dbt all read it.
+From a clean clone that starts MySQL and Postgres, loads `data/*.csv` into MySQL, syncs
+them to Postgres with dlt, installs pinned dbt, and runs `dbt build`. It ends with
+`ERROR=0` and 17 warnings: the source diagnostics listed below, which are meant to warn.
 
-## Layout
+| Target | What it does |
+|---|---|
+| `make bootstrap` | everything above, in order |
+| `make build` | `dbt build` only |
+| `make docs` | generate and serve the dbt documentation |
+| `make report` | rebuild `report/nordstack-billing-report.html` from the marts |
+| `make airflow-test` | parse the DAG in an isolated Airflow 3.3 install |
+| `make nuke` | stop both databases and drop their volumes |
 
-    data/                 billing CSV exports (the assessment input, unchanged)
+Requirements: Docker with Compose v2, Python 3.12, make. If port 5432 or 3306 is taken,
+copy `.env.example` to `.env` and change `NORDSTACK_PG_PORT` or `NORDSTACK_MYSQL_PORT`;
+compose, ingestion, dbt and the report all read the same variables.
+
+## How it is built
+
+    data/*.csv  ->  MySQL (billing)  ->  dlt  ->  Postgres raw  ->  dbt  ->  marts  ->  report
+                                                       |
+                                          17 warn-level diagnostics
+
+    data/                 billing CSV exports, the assessment input, unchanged
     ingestion/            load_source_system.py (CSV -> MySQL), sync_to_warehouse.py (dlt MySQL -> Postgres)
     models/sources.yml    raw tables with warn-level diagnostics
-    models/staging/       base_* type and classify every row; stg_* keep the clean ones
-    models/quarantine/    rej_* keep the rejected ones with reject_reason
-    models/intermediate/  paid invoices in EUR, month spine
+    models/staging/       base_* type and classify every row; stg_* keep the usable ones
+    models/quarantine/    rej_* keep the rejected ones, each with a reject_reason
+    models/intermediate/  paid invoices in EUR within the cutoff, month spine
     models/marts/         fct_mrr_monthly_by_plan, dim_customer_ltv, fct_churn_monthly
     tests/sources/        singular diagnostics (warn) and an empty-source guard (error)
     tests/staging/        disposition and billing-rule tests (error)
     tests/marts/          reconciliation and coverage tests (error)
-    airflow/              DAG, test, deploy notes
+    report/               template and builder for the one-page report
+    airflow/              DAG, parse test, deploy notes
 
 ## Decisions
 
@@ -106,12 +139,22 @@ Source diagnostics are WARN and are meant to keep warning: they document the exp
 Handling lives in `base_*`. Disposition tests prove clean + rejected = raw. Reconciliation
 tests tie paid revenue, LTV and churn back to the source; coverage tests prove MRR has
 exactly one row per spine month and plan, churn one per spine month, LTV one per
-customer. dbt unit tests pin the two rules with the most branches: subscription state
-at the cutoff and customer status precedence. Everything after staging is ERROR.
+customer. dbt unit tests pin the rules with the most branches: subscription state at the
+cutoff, customer status precedence and revenue attribution, churn by month, MRR by month
+and plan. Everything after staging is ERROR.
 
 ## Airflow
 
-See `airflow/README.md`.
+`airflow/dags/nordstack_billing.py` runs `dlt_sync >> dbt_build` every five minutes and
+emails on success and on failure through DAG-level notifiers. Deploy assumptions and the
+parse test are in [`airflow/README.md`](airflow/README.md).
+
+## Report
+
+`make report` renders [`report/nordstack-billing-report.html`](report/nordstack-billing-report.html)
+from the marts: a single self-contained page, charts drawn as inline SVG from embedded
+data, each with a hover detail and a data table, printable to PDF. The layout and chart
+code live in `report/template.html`; `report/build_report.py` only supplies the data.
 
 ## Next steps
 
