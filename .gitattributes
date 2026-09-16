@@ -1,0 +1,4 @@
+# Language statistics: count the dbt SQL, hide the generated report and the README image.
+*.sql linguist-detectable=true
+report/nordstack-billing-report.html linguist-generated=true
+docs/** linguist-documentation=true
