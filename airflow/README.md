@@ -16,3 +16,10 @@ the tasks at run time):
 Validate the DAG without a scheduler:
 
     make airflow-test
+
+This parses the DAG file and checks its configuration. It does not run tasks or send
+mail; `make bootstrap` does not deploy Airflow. On an existing Airflow 3.3 installation
+with the standard and SMTP providers: copy the repository to the worker, set the
+variables above, run `dbt deps` once, place `dags/` on the DAG processor, then
+`airflow dags unpause nordstack_billing` (new DAGs start paused) and
+`airflow dags trigger nordstack_billing`.

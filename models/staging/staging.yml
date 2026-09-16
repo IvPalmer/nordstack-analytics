@@ -57,7 +57,7 @@ models:
       - name: start_date
         data_tests: [not_null]
       - name: end_date
-        description: Trusted cancellation date. NULL while running or when the export was inconsistent.
+        description: Exported end date when on or after start_date, otherwise NULL. May be after the cutoff.
       - name: status
         description: Exported status, lower-cased.
         data_tests:
@@ -67,8 +67,9 @@ models:
                 values: [active, paused, cancelled]
       - name: subscription_state
         description: >
-          Status at the cutoff: active, paused, cancelled, pending (starts later) or
-          pending_cancellation (cancelled for a date after the cutoff, still running).
+          Status at the cutoff: active, paused, cancelled, pending (not cancelled, starts
+          after the cutoff) or pending_cancellation (cancelled for a date after the cutoff,
+          still running).
         data_tests:
           - not_null
           - accepted_values:
