@@ -1,4 +1,4 @@
-# Host ports and connection URLs can be overridden in .env (see .env.example).
+# make exports the connection settings in .env (see .env.example) to every target.
 -include .env
 export
 

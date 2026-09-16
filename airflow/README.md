@@ -16,3 +16,8 @@ the tasks at run time):
 Validate the DAG without a scheduler:
 
     make airflow-test
+
+This parses the DAG file and checks its configuration. It does not run tasks or send
+mail; `make bootstrap` does not deploy Airflow. A minimal deployment: copy the repository
+to the worker, set the variables above, run `dbt deps` once, place `dags/` on the DAG
+processor, and trigger a run with `airflow dags trigger nordstack_billing`.

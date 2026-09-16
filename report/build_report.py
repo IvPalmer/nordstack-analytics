@@ -1,10 +1,12 @@
 """Render report/nordstack-billing-report.html from the marts in Postgres.
 
-The template holds the layout and the chart code; this script only supplies the
-data, so the page is always a faithful reading of the current marts.
+The template holds the layout, the chart code and the prose; every number in the
+prose is a placeholder filled here from the marts, so a rebuild refreshes the page
+as a whole. The findings table describes this export and is written by hand.
 """
 import json
 import os
+import re
 import sys
 from datetime import date
 from pathlib import Path
@@ -28,7 +30,22 @@ QUARANTINE = "analytics_quarantine"
 
 QUERY = f"""
 select json_build_object(
-  'as_of', (select max(invoice_date) from {STAGING}.stg_invoices),
+  'counts', (select json_build_object(
+      'raw_c', (select count(*) from raw.raw_customers),
+      'raw_s', (select count(*) from raw.raw_subscriptions),
+      'raw_i', (select count(*) from raw.raw_invoices),
+      'stg_c', (select count(*) from {STAGING}.stg_customers),
+      'stg_s', (select count(*) from {STAGING}.stg_subscriptions),
+      'stg_i', (select count(*) from {STAGING}.stg_invoices),
+      'rej_s', (select count(*) from {QUARANTINE}.rej_subscriptions),
+      'rej_i', (select count(*) from {QUARANTINE}.rej_invoices),
+      'paid', (select count(*) from {STAGING}.int_paid_invoices),
+      'scheduled', (select count(*) from {STAGING}.stg_subscriptions where subscription_state = 'pending_cancellation'),
+      'multi', (select count(*) from (
+          select customer_id from {STAGING}.stg_subscriptions
+          group by 1
+          having bool_or(subscription_state = 'active')
+             and (array_agg(subscription_state order by start_date desc))[1] <> 'active') m))),
   'mrr', (select json_agg(json_build_object('m', revenue_month, 'p', plan_name, 'eur', mrr_eur,
                                              'inv', paid_invoices, 'subs', paying_subscriptions)
                           order by revenue_month, plan_name)
@@ -55,17 +72,67 @@ select json_build_object(
 """
 
 
+def eur(value: float) -> str:
+    return f"€{round(value):,}"
+
+
+def month(iso: str) -> str:
+    return date.fromisoformat(str(iso)[:10]).strftime("%B %Y")
+
+
+def figures(data: dict, cutoff: str) -> dict:
+    """Numbers quoted in the prose, all derived from the mart extracts."""
+    by_month: dict[str, float] = {}
+    subs_by_month: dict[str, int] = {}
+    for row in data["mrr"]:
+        by_month[row["m"]] = by_month.get(row["m"], 0) + float(row["eur"])
+        subs_by_month[row["m"]] = subs_by_month.get(row["m"], 0) + row["subs"]
+    months = sorted(by_month)
+    last, peak = months[-1], max(months, key=by_month.get)
+    revenue = sum(by_month.values())
+    scale = sum(float(r["eur"]) for r in data["mrr"] if r["p"] == "scale")
+    churn_n = sum(r["n"] for r in data["churn"])
+    churn_eur = sum(float(r["eur"]) for r in data["churn"])
+    churn_12m = sum(r["n"] for r in data["churn"][-12:])
+    top10 = sum(float(r["eur"]) for r in data["ltv"][:10])
+    c = data["counts"]
+    return {
+        "CUTOFF": date.fromisoformat(cutoff).strftime("%-d %b %Y"),
+        "MRR_LAST": eur(by_month[last]), "MONTH_LAST": month(last), "SUBS_LAST": subs_by_month[last],
+        "MRR_PEAK": eur(by_month[peak]), "MONTH_PEAK": month(peak), "MONTH_FIRST": month(months[0]),
+        "SCALE_SHARE": f"{scale / revenue:.0%}",
+        "CHURN_N": churn_n, "CHURN_EUR": eur(churn_eur), "CHURN_12M": f"{churn_12m} of {churn_n}",
+        "REVENUE": eur(revenue), "PAID_INVOICES": f"{c['paid']:,}",
+        "CUSTOMERS": c["stg_c"], "ACTIVE": data["status"].get("active", 0),
+        "TOP10_SHARE": f"{top10 / revenue:.1%}",
+        "SCHEDULED": c["scheduled"], "MULTI": c["multi"],
+        "RAW_C": c["raw_c"], "RAW_S": c["raw_s"], "RAW_INVOICES": f"{c['raw_i']:,}",
+        "RAW_TOTAL": f"{c['raw_c'] + c['raw_s'] + c['raw_i']:,}",
+        "COLLAPSED": (c["raw_c"] - c["stg_c"]) + (c["raw_s"] - c["stg_s"] - c["rej_s"]),
+        "REJ_S": c["rej_s"], "REJ_INVOICES": c["rej_i"], "REJ_TOTAL": c["rej_s"] + c["rej_i"],
+        "STG_C": c["stg_c"], "STG_S": c["stg_s"], "STG_I": f"{c['stg_i']:,}",
+        "STG_TOTAL": f"{c['stg_c'] + c['stg_s'] + c['stg_i']:,}",
+        "GENERATED": date.today().strftime("%-d %b %Y"),
+    }
+
+
+def cutoff_from_project() -> str:
+    import yaml
+
+    project = yaml.safe_load((HERE.parent / "dbt_project.yml").read_text())
+    return str(project["vars"]["as_of_date"])
+
+
 def main() -> None:
     with psycopg2.connect(**CONNECTION) as conn, conn.cursor() as cur:
         cur.execute(QUERY)
         data = cur.fetchone()[0]
-    html = (
-        TEMPLATE.read_text()
-        .replace("__DATA__", json.dumps(data, default=str, separators=(",", ":")))
-        .replace("__GENERATED__", date.today().strftime("%-d %b %Y"))
-    )
+    html = TEMPLATE.read_text().replace("__DATA__", json.dumps(data, default=str, separators=(",", ":")))
+    for key, value in figures(data, cutoff_from_project()).items():
+        html = html.replace(f"__{key}__", str(value))
+    assert "__" not in re.sub(r"__dlt_\w+", "", html), "unfilled placeholder in template"
     OUTPUT.write_text(html)
-    print(f"{OUTPUT.name}: {len(html) // 1024} KB, {len(data['ltv'])} customers listed, cutoff {data['as_of']}")
+    print(f"{OUTPUT.name}: {len(html) // 1024} KB, cutoff {cutoff_from_project()}")
 
 
 if __name__ == "__main__":

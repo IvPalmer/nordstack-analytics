@@ -4,8 +4,6 @@ A tested analytics layer over three raw billing exports: MySQL as the source sys
 dlt into Postgres, dbt for the models and tests, Airflow to run it every five minutes,
 and a one-page report read straight from the marts.
 
-![One-page report generated from the marts: billed MRR by plan, customer value, status at the cutoff](docs/report.png)
-
 ## Results
 
 | | |
@@ -14,18 +12,26 @@ and a one-page report read straight from the marts.
 | MRR, July 2026 | €14,003 across 107 paying subscriptions; peak €15,484 in Dec 2025 |
 | Customers | 120, of which 86 active at the cutoff |
 | Churn | 46 subscriptions, €7,114 of contractual MRR |
-| Data quality | 17 defects in the export caught by tests, 10 rows quarantined, 2 duplicates collapsed |
-| Reconciliation | paid revenue in the source = marts + quarantine, to the cent |
+| Data quality | 28 warn-level checks on the raw tables, 17 fail on this export; 10 rows quarantined, 2 duplicates collapsed |
+| Reconciliation | €325,086.01 paid in the source = €325,282.01 in the marts + (-€196.00) quarantined paid amounts |
+
+![Top of the one-page report: headline figures and billed MRR by plan](docs/report.png)
 
 Open [`report/nordstack-billing-report.html`](report/nordstack-billing-report.html) for the
-charts, or run `make docs` for the dbt documentation and lineage.
+full page, or run `make docs` for the dbt documentation and lineage. The marts live in
+schema `analytics_marts`:
+
+    select revenue_month, plan_name, mrr_eur
+    from analytics_marts.fct_mrr_monthly_by_plan
+    where revenue_month >= date '2026-01-01'
+    order by 1, 2;
 
 ## Run it
 
     make bootstrap
 
 From a clean clone that starts MySQL and Postgres, loads `data/*.csv` into MySQL, syncs
-them to Postgres with dlt, installs pinned dbt, and runs `dbt build`. It ends with
+them to Postgres with dlt, installs dbt 1.11, and runs `dbt build`. It ends with
 `ERROR=0` and 17 warnings: the source diagnostics listed below, which are meant to warn.
 
 | Target | What it does |
@@ -45,7 +51,7 @@ compose, ingestion, dbt and the report all read the same variables.
 
     data/*.csv  ->  MySQL (billing)  ->  dlt  ->  Postgres raw  ->  dbt  ->  marts  ->  report
                                                        |
-                                          17 warn-level diagnostics
+                                          28 warn-level checks
 
     data/                 billing CSV exports, the assessment input, unchanged
     ingestion/            load_source_system.py (CSV -> MySQL), sync_to_warehouse.py (dlt MySQL -> Postgres)
@@ -65,11 +71,11 @@ compose, ingestion, dbt and the report all read the same variables.
 **Ingestion.** MySQL stands in for the billing system. dlt's `sql_database` source syncs
 the three tables to Postgres schema `raw` with `write_disposition="replace"`: the source
 has no updated-at column or change log, and the tables are small, so a full reload is
-the honest option. dlt adds `_dlt_load_id` and `_dlt_id` to every row.
+appropriate. dlt adds `_dlt_load_id` and `_dlt_id` to every row.
 
 **Raw stays raw.** Columns arrive as text and are cast once, in `base_*` (or in
-`stg_customers`, which has no base model because customers are never rejected). Blank
-cells are NULL, as the source database would store them. Casts are deliberately
+`stg_customers`, which has no base model because customers are never rejected). Empty
+CSV cells are loaded as SQL NULL. Casts are deliberately
 fail-fast: a malformed date or amount stops the build instead of being quarantined,
 because it would mean the export format itself changed.
 
@@ -81,19 +87,19 @@ is NULL and the `_raw` column keeps the export value (`email` / `email_raw`,
 **Quarantine, not deletion.** `base_*` assigns a `reject_reason` to rows no mart can use
 (non-positive price or amount, missing amount or start date, unknown plan, status,
 currency or subscription). `stg_*` keeps the rest, `rej_*` keeps the rejected rows, and a
-test proves the two add up to the raw table. Two defects are deliberately not rejected:
+test proves the two add up to the raw rows (distinct raw rows for subscriptions, which
+hold an exact duplicate). Two defects are deliberately not rejected:
 a subscription whose customer is missing from the export (its invoices are real money,
 so they count in MRR but cannot be attributed in LTV), and a subscription whose end date
 precedes its start date (its invoices are real; its end date is nulled, so it keeps the
 exported status cancelled but is never counted as churn, having no trusted month).
 
-**Materialisation.** Staging, quarantine and intermediate are views (small data, always
-fresh, cheap to inspect). Marts are tables (what BI reads).
+**Materialisation.** Staging, quarantine and intermediate are views over the latest
+loaded data. Marts are tables, which is what BI reads.
 
 **MRR is billed, churn loss is contractual.** `fct_mrr_monthly_by_plan` sums paid invoice
 amounts in EUR by invoice month, as the brief asks. `fct_churn_monthly` sums
-`monthly_price` of subscriptions cancelled in the month. The two bases differ on purpose
-and the descriptions say so.
+`monthly_price` of subscriptions cancelled in the month. The two bases differ on purpose.
 
 **Fixed cutoff.** `as_of_date` (2026-07-28, the last invoice date) replaces
 `current_date` everywhere, so the marts do not change without new data. It also defines
@@ -136,7 +142,8 @@ which is why status is aggregated rather than taken from the latest row.
 ## Tests
 
 Source diagnostics are WARN and are meant to keep warning: they document the export.
-Handling lives in `base_*`. Disposition tests prove clean + rejected = raw. Reconciliation
+Handling lives in `base_*` and `stg_*`. Disposition tests prove clean + rejected = raw
+(distinct raw rows for subscriptions). Reconciliation
 tests tie paid revenue, LTV and churn back to the source; coverage tests prove MRR has
 exactly one row per spine month and plan, churn one per spine month, LTV one per
 customer. dbt unit tests pin the rules with the most branches: subscription state at the
@@ -152,9 +159,32 @@ parse test are in [`airflow/README.md`](airflow/README.md).
 ## Report
 
 `make report` renders [`report/nordstack-billing-report.html`](report/nordstack-billing-report.html)
-from the marts: a single self-contained page, charts drawn as inline SVG from embedded
-data, each with a hover detail and a data table, printable to PDF. The layout and chart
-code live in `report/template.html`; `report/build_report.py` only supplies the data.
+from the marts: one HTML file with the chart data embedded, inline SVG charts with hover
+detail (MRR, customer ranking and churn also carry a data table), printable to PDF. The
+only external request is the Lato web font. `report/template.html` holds the layout, the
+chart code and the prose; `report/build_report.py` fills every number in the prose from
+the marts, so a rebuild refreshes the whole page. The findings table is written by hand
+because it describes this export.
+
+## Validation record
+
+| Check | Command | Outcome |
+|---|---|---|
+| Clean-clone build | `git clone . /tmp/x && cd /tmp/x && make bootstrap` | `PASS=100 WARN=17 ERROR=0` (dbt-core 1.11.15, dbt-postgres 1.11.0, dlt 1.30.0, Postgres 16, MySQL 8.4) |
+| DAG parse | `make airflow-test` | 1 passed (apache-airflow 3.3.1) |
+| Marts vs an independent replica | pandas over `data/*.csv` with the documented rules | MRR 325,282.01; LTV 322,890.01; churn 46 / 7,114.00, all equal |
+| Report | `make report` | 36 KB, cutoff 2026-07-28 |
+
+CI is listed under next steps; it is not set up in this repository.
+
+## Limitations
+
+- The reporting cutoff is 2026-07-28, so July 2026 holds 28 days of invoices.
+- €2,392 of paid revenue belongs to a subscription with no customer record; it is in
+  MRR and not in any customer's lifetime value.
+- One paid invoice has no amount and cannot be valued; it is quarantined and counted.
+- SEK is converted at a fixed 0.087; `monthly_price` is assumed EUR.
+- Email delivery from the DAG is configured, not exercised.
 
 ## Next steps
 

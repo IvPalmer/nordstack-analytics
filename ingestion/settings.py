@@ -1,5 +1,5 @@
-"""Connection settings. Defaults match docker-compose.yml; the NORDSTACK_PG_* variables
-are the same ones profiles.yml reads, so one .env configures ingestion and dbt alike."""
+"""Connection settings. Defaults match docker-compose.yml. The NORDSTACK_* variables are
+the same ones profiles.yml reads; make exports them from .env to ingestion and dbt."""
 import os
 
 from sqlalchemy import URL

@@ -137,14 +137,6 @@
 </style>
 </head>
 <body>
-<!--
-THESIS: an executive reads one page and knows what NordStack earns, keeps and loses, and how far the numbers can be trusted; it refuses the dashboard-of-tiles arrangement in favour of one argument told in three charts and a quality ledger.
-OWN-WORLD: Pearl's navy band and teal accent on a cool light plane, Lato, hairline rules, rounded white figures with soft navy-tinted shadow; three validated series hues (navy-blue, teal, amber) reserved for the plans.
-STORY: revenue is billed and reconciled to the source; churn is contractual and dated; every defect in the export was caught, named and handled; the reader trusts the marts and can rebuild them with one command.
-FIRST VIEWPORT: navy band with title and provenance; below it a lede paragraph with the four figures that matter and, beside it, the three key numbers; then the MRR stacked chart at full width.
-FORM: a printed analytical note with live charts; position 1 of 1, brief-pinned (Pearl identity, exec-level, clean); no seed roll.
-FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, and DESIGN.md
--->
 <header class="band">
   <div class="wrap">
     <div>
@@ -154,7 +146,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     <div class="meta">
       <strong>Raphael Palmer</strong>
       Data Engineer take-home, prepared for Pearl<br>
-      Reporting cutoff 28 Jul 2026 · generated __GENERATED__
+      Reporting cutoff __CUTOFF__ · generated __GENERATED__
       <br><span class="stamp">Synthetic dataset supplied with the assessment</span>
     </div>
   </div>
@@ -163,15 +155,15 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
 <main class="wrap">
   <section class="lede">
     <div>
-      <p>NordStack billed <strong>€14,003 of MRR in July 2026</strong> across 107 paying subscriptions, after peaking at €15,484 in December 2025. The scale plan carries two thirds of lifetime revenue. Since January 2024, <strong>46 subscriptions have churned</strong>, taking €7,114 of contractual monthly value with them; half of that churn happened in the last twelve months.</p>
-      <p>Every figure on this page is reconciled back to the raw export: the 2,855 invoices were classified row by row, 9 were quarantined with a stated reason, and paid revenue in the source equals revenue in the marts plus revenue in quarantine, to the cent.</p>
+      <p>NordStack billed <strong>__MRR_LAST__ of MRR in __MONTH_LAST__</strong> across __SUBS_LAST__ paying subscriptions, after peaking at __MRR_PEAK__ in __MONTH_PEAK__. The scale plan carries __SCALE_SHARE__ of billed revenue. Since __MONTH_FIRST__, <strong>__CHURN_N__ subscriptions have churned</strong>, taking __CHURN_EUR__ of contractual monthly value with them; __CHURN_12M__ of those cancellations fall in the last twelve months.</p>
+      <p>Every figure on this page is reconciled back to the raw export: the __RAW_INVOICES__ invoices were classified row by row, __REJ_INVOICES__ were quarantined with a stated reason, and paid revenue in the source equals revenue in the marts plus revenue in quarantine, to the cent.</p>
     </div>
     <div class="side">
       <dl>
-        <div><dt>Billed revenue to date<small>2,445 paid invoices</small></dt><dd class="num">€325,282</dd></div>
-        <div><dt>Customers<small>86 active at the cutoff</small></dt><dd class="num">120</dd></div>
-        <div><dt>Churned subscriptions<small>€7,114 contractual MRR lost</small></dt><dd class="num">46</dd></div>
-        <div><dt>MRR, July 2026<small>107 paying subscriptions</small></dt><dd class="num">€14,003</dd></div>
+        <div><dt>Billed revenue to date<small>__PAID_INVOICES__ paid invoices</small></dt><dd class="num">__REVENUE__</dd></div>
+        <div><dt>Customers<small>__ACTIVE__ active at the cutoff</small></dt><dd class="num">__CUSTOMERS__</dd></div>
+        <div><dt>Churned subscriptions<small>__CHURN_EUR__ contractual MRR lost</small></dt><dd class="num">__CHURN_N__</dd></div>
+        <div><dt>MRR, __MONTH_LAST__<small>__SUBS_LAST__ paying subscriptions</small></dt><dd class="num">__MRR_LAST__</dd></div>
       </dl>
     </div>
   </section>
@@ -189,14 +181,14 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
 
   <h2>Customers</h2>
   <figure id="fig-status">
-    <header><h3>120 customers by strongest subscription state at the cutoff</h3></header>
+    <header><h3>__CUSTOMERS__ customers by strongest subscription state at the cutoff</h3></header>
     <div class="status"></div>
     <div class="status-legend"></div>
-    <p class="status-note">A customer is <em>active</em> if any subscription is active. Four subscriptions are cancelled for a date after the cutoff and still billing, so their customers read as <em>pending cancellation</em>. Fourteen customers hold an older active subscription next to a newer cancelled one, which is why status is aggregated rather than read from the latest row.</p>
+    <p class="status-note">A customer is <em>active</em> if any subscription is active. __SCHEDULED__ subscriptions are cancelled for a date after the cutoff and still billing; where that is the customer's strongest state they read as <em>pending cancellation</em>. __MULTI__ customers hold an older active subscription next to a newer non-active one, which is why status is aggregated rather than read from the latest row.</p>
   </figure>
   <div class="two">
     <figure id="fig-ltv">
-      <header><h3>Top ten customers by paid revenue, EUR</h3><span class="hint">24.6% of all revenue</span></header>
+      <header><h3>Top ten customers by paid revenue, EUR</h3><span class="hint">__TOP10_SHARE__ of billed revenue</span></header>
       <div class="chart"></div>
       <div class="tip"></div>
       <details><summary>Data table</summary><div class="tbl"></div></details>
@@ -218,11 +210,11 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
 
   <h2>What the export got wrong, and what was done about it</h2>
   <div class="flow">
-    <div><div class="k">Raw rows</div><div class="v num">3,151</div><div class="d">121 customers · 175 subscriptions · 2,855 invoices</div></div>
-    <div><div class="k">Diagnostics</div><div class="v num">17 warnings</div><div class="d">one per planted defect, kept warning on purpose</div></div>
-    <div><div class="k">Collapsed</div><div class="v num">2</div><div class="d">exact duplicate rows</div></div>
-    <div><div class="k">Quarantined</div><div class="v num">10</div><div class="d">1 subscription · 9 invoices, each with a reason</div></div>
-    <div><div class="k">Usable</div><div class="v num">3,139</div><div class="d">120 · 173 · 2,846 rows into the marts, reconciled</div></div>
+    <div><div class="k">Raw rows</div><div class="v num">__RAW_TOTAL__</div><div class="d">__RAW_C__ customers · __RAW_S__ subscriptions · __RAW_INVOICES__ invoices</div></div>
+    <div><div class="k">Diagnostics</div><div class="v num">28 checks</div><div class="d">warn-level tests on the raw tables; 17 fail on this export, on purpose</div></div>
+    <div><div class="k">Collapsed</div><div class="v num">__COLLAPSED__</div><div class="d">exact duplicate rows</div></div>
+    <div><div class="k">Quarantined</div><div class="v num">__REJ_TOTAL__</div><div class="d">__REJ_S__ subscriptions · __REJ_INVOICES__ invoices, each with a reason</div></div>
+    <div><div class="k">Usable</div><div class="v num">__STG_TOTAL__</div><div class="d">__STG_C__ · __STG_S__ · __STG_I__ rows into the marts, reconciled</div></div>
   </div>
   <div class="tbl">
   <table class="findings">
