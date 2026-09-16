@@ -155,8 +155,8 @@
 <main class="wrap">
   <section class="lede">
     <div>
-      <p>NordStack billed <strong>__MRR_LAST__ of MRR in __MONTH_LAST__</strong> across __SUBS_LAST__ paying subscriptions, after peaking at __MRR_PEAK__ in __MONTH_PEAK__. The scale plan carries __SCALE_SHARE__ of billed revenue. Since __MONTH_FIRST__, <strong>__CHURN_N__ subscriptions have churned</strong>, taking __CHURN_EUR__ of contractual monthly value with them; __CHURN_12M__ of those cancellations fall in the last twelve months.</p>
-      <p>Every figure on this page is reconciled back to the raw export: the __RAW_INVOICES__ invoices were classified row by row, __REJ_INVOICES__ were quarantined with a stated reason, and paid revenue in the source equals revenue in the marts plus revenue in quarantine, to the cent.</p>
+      <p>NordStack billed <strong>__MRR_LAST__ of MRR in __MONTH_LAST__</strong> across __SUBS_LAST__ paying subscriptions, after peaking at __MRR_PEAK__ in __MONTH_PEAK__. The scale plan carries __SCALE_SHARE__ of billed revenue. Since __MONTH_FIRST__, <strong>__CHURN_N__ subscriptions have churned</strong>, taking __CHURN_EUR__ of contractual monthly value with them; __CHURN_12M__ cancellations fall in the last twelve months.</p>
+      <p>The __RAW_INVOICES__ invoices were classified row by row and __REJ_INVOICES__ were quarantined with a stated reason. Tests reconcile paid amounts, customer revenue and churn totals back to the raw export, to the cent.</p>
     </div>
     <div class="side">
       <dl>
@@ -213,8 +213,8 @@
     <div><div class="k">Raw rows</div><div class="v num">__RAW_TOTAL__</div><div class="d">__RAW_C__ customers · __RAW_S__ subscriptions · __RAW_INVOICES__ invoices</div></div>
     <div><div class="k">Diagnostics</div><div class="v num">28 checks</div><div class="d">warn-level tests on the raw tables; 17 fail on this export, on purpose</div></div>
     <div><div class="k">Collapsed</div><div class="v num">__COLLAPSED__</div><div class="d">exact duplicate rows</div></div>
-    <div><div class="k">Quarantined</div><div class="v num">__REJ_TOTAL__</div><div class="d">__REJ_S__ subscriptions · __REJ_INVOICES__ invoices, each with a reason</div></div>
-    <div><div class="k">Usable</div><div class="v num">__STG_TOTAL__</div><div class="d">__STG_C__ · __STG_S__ · __STG_I__ rows into the marts, reconciled</div></div>
+    <div><div class="k">Quarantined</div><div class="v num">__REJ_TOTAL__</div><div class="d">__REJ_S_LABEL__ · __REJ_INVOICES__ invoices, each with a reason</div></div>
+    <div><div class="k">Usable</div><div class="v num">__STG_TOTAL__</div><div class="d">__STG_C__ · __STG_S__ · __STG_I__ rows in staging, reconciled</div></div>
   </div>
   <div class="tbl">
   <table class="findings">
@@ -241,7 +241,7 @@
 
   <footer>
     <p><strong>Definitions.</strong> MRR is billed: the sum of paid invoice amounts in the invoice month, converted to EUR. Lost MRR on churn is contractual: the monthly price of subscriptions whose cancellation date falls in the month, on or before the reporting cutoff. Customer lifetime value is paid revenue attributable to a customer record. The two revenue bases differ on purpose and are labelled where they appear.</p>
-    <p><strong>Reproduce.</strong> The repository rebuilds everything from a clean clone with <code>make bootstrap</code>: MySQL as the source system, dlt to Postgres, dbt models and tests (source diagnostics warn, everything downstream errors), and an Airflow DAG that reruns the chain every five minutes. This page was generated from the marts on __GENERATED__ with <code>make report</code>; the data is the synthetic set supplied with the assessment.</p>
+    <p><strong>Reproduce.</strong> <code>make bootstrap</code> builds the warehouse from a clean clone: MySQL as the source system, dlt to Postgres, dbt models and tests (source diagnostics warn, everything downstream errors). An Airflow DAG reruns the chain every five minutes when deployed; the report is a separate <code>make report</code>. This page was generated from the marts on __GENERATED__ with <code>make report</code>; the data is the synthetic set supplied with the assessment.</p>
   </footer>
 </main>
 

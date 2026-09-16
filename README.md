@@ -56,7 +56,7 @@ compose, ingestion, dbt and the report all read the same variables.
     data/                 billing CSV exports, the assessment input, unchanged
     ingestion/            load_source_system.py (CSV -> MySQL), sync_to_warehouse.py (dlt MySQL -> Postgres)
     models/sources.yml    raw tables with warn-level diagnostics
-    models/staging/       base_* type and classify every row; stg_* keep the usable ones
+    models/staging/       base_* type and classify subscriptions and invoices; stg_* keep the usable rows
     models/quarantine/    rej_* keep the rejected ones, each with a reject_reason
     models/intermediate/  paid invoices in EUR within the cutoff, month spine
     models/marts/         fct_mrr_monthly_by_plan, dim_customer_ltv, fct_churn_monthly
@@ -77,7 +77,7 @@ appropriate. dlt adds `_dlt_load_id` and `_dlt_id` to every row.
 `stg_customers`, which has no base model because customers are never rejected). Empty
 CSV cells are loaded as SQL NULL. Casts are deliberately
 fail-fast: a malformed date or amount stops the build instead of being quarantined,
-because it would mean the export format itself changed.
+because it requires investigation.
 
 **Clean column plus `_raw` column, no flags.** When a value fails a rule the clean column
 is NULL and the `_raw` column keeps the export value (`email` / `email_raw`,
@@ -89,10 +89,10 @@ is NULL and the `_raw` column keeps the export value (`email` / `email_raw`,
 currency or subscription). `stg_*` keeps the rest, `rej_*` keeps the rejected rows, and a
 test proves the two add up to the raw rows (distinct raw rows for subscriptions, which
 hold an exact duplicate). Two defects are deliberately not rejected:
-a subscription whose customer is missing from the export (its invoices are real money,
-so they count in MRR but cannot be attributed in LTV), and a subscription whose end date
-precedes its start date (its invoices are real; its end date is nulled, so it keeps the
-exported status cancelled but is never counted as churn, having no trusted month).
+a subscription whose customer is missing from the export (its paid invoices count in
+MRR and cannot be attributed in LTV), and a subscription whose end date precedes its
+start date (its invoices count; its end date is nulled, so it keeps the exported status
+cancelled but is never counted as churn, having no trusted month).
 
 **Materialisation.** Staging, quarantine and intermediate are views over the latest
 loaded data. Marts are tables, which is what BI reads.
@@ -103,13 +103,13 @@ amounts in EUR by invoice month, as the brief asks. `fct_churn_monthly` sums
 
 **Fixed cutoff.** `as_of_date` (2026-07-28, the last invoice date) replaces
 `current_date` everywhere, so the marts do not change without new data. It also defines
-two extra subscription states: `pending` (starts after the cutoff) and
+two extra subscription states: `pending` (not cancelled, starts after the cutoff) and
 `pending_cancellation` (cancelled for a date after the cutoff, still running and billed).
 A customer's `current_status` takes the strongest state across their subscriptions
 (active, then pending_cancellation, paused, pending, cancelled).
 
-**Currency.** `fx_rates_to_eur` is a project var with a comment; the two SEK invoices are
-converted with it, and any other currency would be rejected. `monthly_price` has no
+**Currency.** The two SEK invoices are converted with the `fx_rates_to_eur` var; any
+other currency would be rejected. `monthly_price` has no
 currency in the export and is assumed EUR.
 
 **Simplifying billing rule.** No invoice may be dated after a trusted cancellation date.
@@ -162,9 +162,9 @@ parse test are in [`airflow/README.md`](airflow/README.md).
 from the marts: one HTML file with the chart data embedded, inline SVG charts with hover
 detail (MRR, customer ranking and churn also carry a data table), printable to PDF. The
 only external request is the Lato web font. `report/template.html` holds the layout, the
-chart code and the prose; `report/build_report.py` fills every number in the prose from
-the marts, so a rebuild refreshes the whole page. The findings table is written by hand
-because it describes this export.
+chart code and the prose; `report/build_report.py` refreshes headline metrics, charts and
+row counts from the warehouse. Diagnostic counts, plan prices and the findings table
+describe this export and are written by hand.
 
 ## Validation record
 

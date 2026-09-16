@@ -1,8 +1,9 @@
-"""Render report/nordstack-billing-report.html from the marts in Postgres.
+"""Render report/nordstack-billing-report.html from the warehouse.
 
-The template holds the layout, the chart code and the prose; every number in the
-prose is a placeholder filled here from the marts, so a rebuild refreshes the page
-as a whole. The findings table describes this export and is written by hand.
+The template holds the layout, the chart code and the prose. This script refreshes
+headline metrics, charts and row counts from the marts, staging and quarantine
+schemas. Diagnostic counts, plan prices and the findings table describe this export
+and are written by hand in the template.
 """
 import json
 import os
@@ -101,7 +102,7 @@ def figures(data: dict, cutoff: str) -> dict:
         "MRR_LAST": eur(by_month[last]), "MONTH_LAST": month(last), "SUBS_LAST": subs_by_month[last],
         "MRR_PEAK": eur(by_month[peak]), "MONTH_PEAK": month(peak), "MONTH_FIRST": month(months[0]),
         "SCALE_SHARE": f"{scale / revenue:.0%}",
-        "CHURN_N": churn_n, "CHURN_EUR": eur(churn_eur), "CHURN_12M": f"{churn_12m} of {churn_n}",
+        "CHURN_N": churn_n, "CHURN_EUR": eur(churn_eur), "CHURN_12M": f"{churn_12m} of the {churn_n}",
         "REVENUE": eur(revenue), "PAID_INVOICES": f"{c['paid']:,}",
         "CUSTOMERS": c["stg_c"], "ACTIVE": data["status"].get("active", 0),
         "TOP10_SHARE": f"{top10 / revenue:.1%}",
@@ -109,7 +110,7 @@ def figures(data: dict, cutoff: str) -> dict:
         "RAW_C": c["raw_c"], "RAW_S": c["raw_s"], "RAW_INVOICES": f"{c['raw_i']:,}",
         "RAW_TOTAL": f"{c['raw_c'] + c['raw_s'] + c['raw_i']:,}",
         "COLLAPSED": (c["raw_c"] - c["stg_c"]) + (c["raw_s"] - c["stg_s"] - c["rej_s"]),
-        "REJ_S": c["rej_s"], "REJ_INVOICES": c["rej_i"], "REJ_TOTAL": c["rej_s"] + c["rej_i"],
+        "REJ_S_LABEL": f"{c['rej_s']} subscription{'' if c['rej_s'] == 1 else 's'}", "REJ_INVOICES": c["rej_i"], "REJ_TOTAL": c["rej_s"] + c["rej_i"],
         "STG_C": c["stg_c"], "STG_S": c["stg_s"], "STG_I": f"{c['stg_i']:,}",
         "STG_TOTAL": f"{c['stg_c'] + c['stg_s'] + c['stg_i']:,}",
         "GENERATED": date.today().strftime("%-d %b %Y"),
