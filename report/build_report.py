@@ -155,7 +155,7 @@ def summary(f: dict) -> str:
             warned, failed = statuses.count("warn"), statuses.count("error") + statuses.count("fail")
             dbt_line = f"PASS={passed} WARN={warned} ERROR={failed}"
             if warned and not failed:
-                dbt_line += "  (warnings are source diagnostics, one per defect in the export, meant to warn)"
+                dbt_line += f"\n{'':18}the {warned} warnings are source diagnostics, one per defect in the export"
     rows = [
         ("dbt build", dbt_line),
         ("Billed revenue", f"{f['REVENUE']} over {f['PAID_INVOICES']} paid invoices"),
@@ -163,12 +163,16 @@ def summary(f: dict) -> str:
         ("Customers", f"{f['CUSTOMERS']}, {f['ACTIVE']} active at the cutoff"),
         ("Churn", f"{f['CHURN_N']} subscriptions, {f['CHURN_EUR']} contractual MRR"),
         ("Quarantined", f"{f['REJ_TOTAL']} rows ({f['REJ_S_LABEL']}, {f['REJ_INVOICES']} invoices)"),
-        ("Report", hyperlink(OUTPUT.as_uri()) + "  (opening in your browser)"),
-        ("Docs", "make docs"),
     ]
     width = max(len(k) for k, _ in rows)
     lines = "\n".join(f"  {k.ljust(width)}  {v}" for k, v in rows)
-    return f"\nNordStack analytics, reporting cutoff {f['CUTOFF']}\n{lines}\n"
+    rule = "-" * 72
+    return (
+        f"\n{rule}\nNordStack analytics, reporting cutoff {f['CUTOFF']}\n\n{lines}\n\n"
+        f"Report, open in a browser (copy the path, or click it where the terminal allows):\n\n"
+        f"  {hyperlink(OUTPUT.as_uri())}\n\n"
+        f"Documentation and lineage: make docs\n{rule}\n"
+    )
 
 
 if __name__ == "__main__":
