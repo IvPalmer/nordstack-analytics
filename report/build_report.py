@@ -133,7 +133,35 @@ def main() -> None:
         html = html.replace(f"__{key}__", str(value))
     assert "__" not in re.sub(r"__dlt_\w+", "", html), "unfilled placeholder in template"
     OUTPUT.write_text(html)
-    print(f"{OUTPUT.name}: {len(html) // 1024} KB, cutoff {cutoff_from_project()}")
+    print(summary(figures(data, cutoff_from_project())))
+
+
+def summary(f: dict) -> str:
+    """Results block printed at the end of make bootstrap and make report."""
+    run_results = HERE.parent / "target" / "run_results.json"
+    dbt_line = "run make build for test results"
+    if run_results.exists():
+        results = json.loads(run_results.read_text())
+        if results.get("args", {}).get("which") == "build":
+            statuses = [r["status"] for r in results["results"]]
+            passed = statuses.count("pass") + statuses.count("success")
+            warned, failed = statuses.count("warn"), statuses.count("error") + statuses.count("fail")
+            dbt_line = f"PASS={passed} WARN={warned} ERROR={failed}"
+            if warned and not failed:
+                dbt_line += "  (warnings are source diagnostics, one per defect in the export, meant to warn)"
+    rows = [
+        ("dbt build", dbt_line),
+        ("Billed revenue", f"{f['REVENUE']} over {f['PAID_INVOICES']} paid invoices"),
+        (f"MRR {f['MONTH_LAST']}", f"{f['MRR_LAST']} across {f['SUBS_LAST']} paying subscriptions"),
+        ("Customers", f"{f['CUSTOMERS']}, {f['ACTIVE']} active at the cutoff"),
+        ("Churn", f"{f['CHURN_N']} subscriptions, {f['CHURN_EUR']} contractual MRR"),
+        ("Quarantined", f"{f['REJ_TOTAL']} rows ({f['REJ_S_LABEL']}, {f['REJ_INVOICES']} invoices)"),
+        ("Report", OUTPUT.as_uri()),
+        ("Docs", "make docs"),
+    ]
+    width = max(len(k) for k, _ in rows)
+    lines = "\n".join(f"  {k.ljust(width)}  {v}" for k, v in rows)
+    return f"\nNordStack analytics, reporting cutoff {f['CUTOFF']}\n{lines}\n"
 
 
 if __name__ == "__main__":
