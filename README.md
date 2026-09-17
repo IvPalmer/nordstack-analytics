@@ -1,31 +1,9 @@
 # NordStack billing analytics
 
-Three raw billing exports, rebuilt as a tested analytics layer: MySQL as the source
-system, dlt into Postgres, dbt models and tests, an Airflow DAG every five minutes, and a
-one-page report read from the marts.
+dbt analytics layer over three raw billing exports (customers, subscriptions, invoices),
+with the optional dlt step and an Airflow DAG.
 
-## Results
-
-| | |
-|---|---|
-| Billed revenue to date | €325,282 over 2,445 paid invoices (Jan 2024 to Jul 2026) |
-| MRR, July 2026 | €14,003 across 107 paying subscriptions; peak €15,484 in Dec 2025 |
-| Customers | 120, of which 86 active at the cutoff |
-| Churn | 46 subscriptions, €7,114 of contractual MRR |
-| Data quality | 28 warn-level checks on the raw tables, 17 fail on this export; 10 rows quarantined, 2 duplicates collapsed |
-| Reconciliation | €325,086.01 paid in the source = €325,282.01 in the marts + (-€196.00) quarantined paid amounts |
-
-![Top of the one-page report: headline figures and billed MRR by plan](docs/report.png)
-
-Full page: [`report/nordstack-billing-report.html`](report/nordstack-billing-report.html).
-Marts are in schema `analytics_marts`, for example:
-
-    select revenue_month, plan_name, mrr_eur
-    from analytics_marts.fct_mrr_monthly_by_plan
-    where revenue_month >= date '2026-01-01'
-    order by 1, 2;
-
-## Run it
+## Setup
 
 Requirements: Docker Desktop (Compose v2), Python 3.12, make.
 
@@ -33,59 +11,56 @@ Requirements: Docker Desktop (Compose v2), Python 3.12, make.
     cd nordstack-analytics
     make bootstrap
 
-That starts MySQL and Postgres, loads the CSVs, syncs them with dlt, installs dbt, runs
-`dbt build` and renders the report. It takes a few minutes the first time and ends with
-a results summary and the path of the report. Expect `ERROR=0` and 17 warnings: they are
-the source checks listed under findings, which are meant to warn.
+`make bootstrap` starts MySQL and Postgres, loads the CSVs into MySQL, syncs them to
+Postgres with dlt, installs dbt, runs `dbt build` and prints a summary. First run takes a
+few minutes. Expected end: `PASS=100 WARN=17 ERROR=0`. The 17 warnings are the
+source-level checks that catch the planted issues; they warn by design and the marts
+downstream pass.
 
-If port 5432 or 3306 is already in use, copy `.env.example` to `.env` and change the
-port there before running.
+If port 5432 or 3306 is in use, copy `.env.example` to `.env` and change the port.
 
-Other targets: `make docs` (dbt documentation and lineage), `make report` (rebuild the
-report), `make airflow-test` (parse the DAG in an isolated Airflow 3.3), `make build`
-(dbt only), `make nuke` (remove both databases).
+Other targets: `make docs` (dbt docs), `make airflow-test` (parse the DAG in an isolated
+Airflow 3.3), `make build` (dbt only), `make nuke` (drop both databases).
 
-## How it is built
+## Project structure
 
-    data/*.csv  ->  MySQL (billing)  ->  dlt  ->  Postgres raw  ->  dbt  ->  marts  ->  report
+    data/*.csv  ->  MySQL  ->  dlt  ->  Postgres raw  ->  dbt staging / quarantine  ->  marts
 
-    data/                 billing CSV exports, unchanged
-    ingestion/            CSV -> MySQL, then dlt MySQL -> Postgres
-    models/sources.yml    raw tables with warn-level checks
-    models/staging/       base_* type and classify; stg_* keep the usable rows
+    data/                 the three CSV exports, unchanged
+    ingestion/            load_source_system.py (CSV -> MySQL), sync_to_warehouse.py (dlt MySQL -> Postgres)
+    models/sources.yml    raw tables, 28 warn-level checks
+    models/staging/       base_* type and classify each row; stg_* keep the usable rows
     models/quarantine/    rej_* keep the rejected rows with a reject_reason
     models/intermediate/  paid invoices in EUR within the cutoff, month spine
     models/marts/         fct_mrr_monthly_by_plan, dim_customer_ltv, fct_churn_monthly
-    tests/                source diagnostics (warn); disposition, business-rule, reconciliation and coverage tests (error)
-    report/               template and builder for the one-page report
-    airflow/              DAG, parse test, deploy notes
+    tests/                singular tests: source diagnostics (warn), disposition, business rules, reconciliation, coverage (error)
+    airflow/              nordstack_billing DAG, parse test, deploy notes
+    report/               one-page HTML report (extra, see the end)
 
-## Decisions
+Staging, quarantine and intermediate are views; marts are tables.
 
-- **Ingestion.** dlt `sql_database` with `write_disposition="replace"`: no change tracking
-  in the source and small tables, so a full reload is appropriate.
-- **Raw stays raw.** Columns arrive as text and are cast once in `base_*` (customers in
-  `stg_customers`, since they are never rejected). Empty cells are NULL. A malformed date
-  or amount stops the build rather than being quarantined.
+## Modeling decisions
+
+- **Raw stays raw.** Columns arrive as text and are cast once in `base_*`. Empty cells are
+  NULL. A malformed date or amount stops the build rather than being quarantined.
 - **Clean column plus `_raw` column.** When a value fails a rule the clean column is NULL
-  and `_raw` keeps the export value (`email`, `created_at`, `end_date`).
+  and `_raw` keeps the export value (`email`, `created_at`, `end_date`). No flag columns.
 - **Quarantine, not deletion.** `base_*` assigns a `reject_reason` (non-positive price or
   amount, missing amount or start date, unknown plan, status, currency or subscription).
-  Tests prove clean + rejected = raw. Two defects are kept on purpose: a subscription with
-  no customer record (paid invoices count in MRR, not in LTV) and a subscription whose end
-  date precedes its start (invoices count; end date nulled; never counted as churn).
-- **Views before marts, tables for marts.**
-- **MRR is billed, churn loss is contractual.** MRR sums paid invoices in EUR by invoice
-  month, as the brief asks. Churn sums `monthly_price` of subscriptions cancelled in the
-  month. The two bases differ on purpose.
-- **Fixed cutoff.** `as_of_date` = 2026-07-28, the last invoice date, instead of
-  `current_date`. It defines `pending` (not cancelled, starts later) and
-  `pending_cancellation` (cancelled for a later date, still billing). A customer's status
-  is the strongest across their subscriptions: active, pending_cancellation, paused,
-  pending, cancelled.
-- **Currency.** Two SEK invoices converted with `fx_rates_to_eur`; any other currency is
-  rejected. `monthly_price` has no currency in the export and is assumed EUR.
-- **Billing rule.** No invoice may be dated after a trusted cancellation date.
+  `stg_*` keeps the rest, `rej_*` the rejected rows; tests prove clean + rejected = raw.
+  Kept on purpose: a subscription with no customer record (its paid invoices count in MRR,
+  not in LTV) and a subscription whose end date precedes its start (invoices count, end
+  date nulled, never churn).
+- **MRR is billed.** Sum of paid invoice amounts in EUR by invoice month and plan, as
+  asked. FX is a var, `fx_rates_to_eur` (EUR 1.0, SEK 0.087); other currencies are
+  rejected.
+- **Churn loss is contractual.** Cancelled subscriptions by month of end date, lost MRR =
+  sum of `monthly_price`, assumed EUR since the export has no currency on subscriptions.
+- **Fixed cutoff.** `as_of_date` = 2026-07-28, the last invoice date. Subscriptions
+  starting later are `pending`; cancelled for a later date are `pending_cancellation`
+  and still billing. A customer's status is the strongest across their subscriptions.
+- **Ingestion.** dlt `sql_database` with `write_disposition="replace"`: the source has no
+  change tracking and the tables are small.
 
 ## Data-quality findings
 
@@ -107,51 +82,20 @@ report), `make airflow-test` (parse the DAG in an isolated Airflow 3.3), `make b
 | 14 | Status with trailing space and upper case | I000451 | accepted_values | trimmed, lower-cased |
 | 15 | Two SEK invoices | I000101, I000201 | accepted_values | converted at the var rate |
 
-Not defects, but relevant: paused subscriptions keep being invoiced, and for 14 customers
-the newest subscription is not the active one, which is why status is aggregated rather
-than read from the latest row.
+Also observed: paused subscriptions keep being invoiced, and 14 customers have an older
+active subscription next to a newer inactive one, which is why status is aggregated.
 
-## Tests
-
-- Source checks are WARN and stay that way: they document the export. Handling lives in
-  `base_*` and `stg_*`.
-- Disposition tests: clean + rejected = raw (distinct raw rows for subscriptions).
-- Reconciliation tests tie paid revenue, LTV and churn back to the source, to the cent.
-- Coverage tests: one MRR row per month and plan, one churn row per month, one LTV row per
-  customer.
-- dbt unit tests on the rules with the most branches: subscription state at the cutoff,
-  customer status and revenue attribution, churn by month, MRR by month and plan.
-- Everything after staging is ERROR.
+Tests: source checks are WARN and document the export; everything after staging is ERROR.
+Singular tests cover disposition (clean + rejected = raw), the billing rule (no invoice
+after a trusted cancellation), reconciliation of paid revenue, LTV and churn to the
+source, and grid coverage of the monthly marts. Four dbt unit tests pin the subscription
+state, customer status, churn and MRR rules. Reconciliation: €325,086.01 paid in the
+source = €325,282.01 in the marts + (-€196.00) quarantined.
 
 ## Airflow
 
-`airflow/dags/nordstack_billing.py` runs `dlt_sync >> dbt_build` every five minutes with
-email on success and on failure. Deployment notes and the parse test:
-[`airflow/README.md`](airflow/README.md).
-
-## Report
-
-`make report` renders the one-page HTML from the warehouse: embedded data, inline SVG
-charts with hover detail and data tables, printable to PDF. `report/template.html` holds
-layout, charts and prose; `report/build_report.py` fills the figures. The findings table
-and plan prices describe this export and are written by hand.
-
-## Validation
-
-| Check | Command | Outcome |
-|---|---|---|
-| Clean-clone build | `make bootstrap` | `PASS=100 WARN=17 ERROR=0` (dbt-core 1.11.15, dbt-postgres 1.11.0, dlt 1.30.0, Postgres 16, MySQL 8.4) |
-| DAG parse | `make airflow-test` | 1 passed (apache-airflow 3.3.1) |
-| Marts vs an independent replica | pandas over `data/*.csv` with the documented rules | MRR 325,282.01; LTV 322,890.01; churn 46 / 7,114.00 |
-
-## Limitations
-
-- The cutoff is 2026-07-28, so July 2026 holds 28 days of invoices.
-- €2,392 of paid revenue belongs to a subscription with no customer record: in MRR, in
-  nobody's lifetime value.
-- One paid invoice has no amount; it is quarantined and counted, not valued.
-- SEK at a fixed 0.087; `monthly_price` assumed EUR.
-- Email delivery from the DAG is configured, not exercised.
+`airflow/dags/nordstack_billing.py`: `dlt_sync >> dbt_build` every five minutes, email on
+success and on failure. Deployment notes in [`airflow/README.md`](airflow/README.md).
 
 ## Next steps
 
@@ -159,3 +103,10 @@ and plan prices describe this export and are written by hand.
 - dbt snapshots on subscriptions for status history and contractual MRR.
 - CI with `dbt build --select state:modified+` against a production manifest.
 - FX from a rates table; dbt-expectations for distribution checks.
+
+## Extra: one-page report
+
+`make report` renders [`report/nordstack-billing-report.html`](report/nordstack-billing-report.html)
+from the marts (single file, inline SVG charts, printable). Not part of the brief.
+
+<img src="docs/report.png" width="640" alt="Top of the one-page report">
