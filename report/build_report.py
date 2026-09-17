@@ -169,7 +169,7 @@ def summary(f: dict) -> str:
     rule = "-" * 72
     return (
         f"\n{rule}\nNordStack analytics, reporting cutoff {f['CUTOFF']}\n\n{lines}\n\n"
-        f"Report, open in a browser (copy the path, or click it where the terminal allows):\n\n"
+        f"Report:\n\n"
         f"  {hyperlink(OUTPUT.as_uri())}\n\n"
         f"Documentation and lineage: make docs\n{rule}\n"
     )
