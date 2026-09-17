@@ -10,7 +10,7 @@ AIRFLOW_CONSTRAINTS = https://raw.githubusercontent.com/apache/airflow/constrain
 .NOTPARALLEL:
 .PHONY: bootstrap db venv ingest deps build test docs report clean nuke airflow-test
 
-bootstrap: db venv ingest deps build   ## clean clone -> loaded, built, tested warehouse
+bootstrap: db venv ingest deps build report   ## clean clone -> loaded, built, tested warehouse, report and summary
 
 db:
 	docker compose up -d --wait
@@ -36,8 +36,8 @@ test:
 docs:
 	$(DBT) docs generate && $(DBT) docs serve
 
-report:   ## one-page HTML reading of the marts
-	.venv/bin/python report/build_report.py
+report:   ## one-page HTML reading of the marts, then a results summary
+	@.venv/bin/python report/build_report.py
 
 clean:
 	$(DBT) clean
