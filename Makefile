@@ -36,9 +36,8 @@ test:
 docs:
 	$(DBT) docs generate && $(DBT) docs serve
 
-report:   ## one-page HTML reading of the marts, a results summary, and the page in your browser
+report:   ## one-page HTML reading of the marts, then a results summary
 	@.venv/bin/python report/build_report.py
-	@open report/nordstack-billing-report.html 2>/dev/null || xdg-open report/nordstack-billing-report.html 2>/dev/null || true
 
 clean:
 	$(DBT) clean
