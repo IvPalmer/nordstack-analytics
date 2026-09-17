@@ -31,15 +31,16 @@ schema `analytics_marts`:
     make bootstrap
 
 From a clean clone that starts MySQL and Postgres, loads `data/*.csv` into MySQL, syncs
-them to Postgres with dlt, installs dbt 1.11, and runs `dbt build`. It ends with
-`ERROR=0` and 17 warnings: the source diagnostics listed below, which are meant to warn.
+them to Postgres with dlt, installs dbt 1.11, runs `dbt build` and renders the report.
+The build ends with `ERROR=0` and 17 warnings, the source diagnostics listed below,
+which are meant to warn. The last thing printed is a results summary with the report path.
 
 | Target | What it does |
 |---|---|
-| `make bootstrap` | everything above, in order |
+| `make bootstrap` | everything above, in order, ending with a results summary |
 | `make build` | `dbt build` only |
 | `make docs` | generate and serve the dbt documentation |
-| `make report` | rebuild `report/nordstack-billing-report.html` from the marts |
+| `make report` | rebuild `report/nordstack-billing-report.html` from the marts and print the summary |
 | `make airflow-test` | parse the DAG in an isolated Airflow 3.3 install |
 | `make nuke` | stop both databases and drop their volumes |
 
