@@ -163,8 +163,7 @@ def summary(f: dict) -> str:
         ("Customers", f"{f['CUSTOMERS']}, {f['ACTIVE']} active at the cutoff"),
         ("Churn", f"{f['CHURN_N']} subscriptions, {f['CHURN_EUR']} contractual MRR"),
         ("Quarantined", f"{f['REJ_TOTAL']} rows ({f['REJ_S_LABEL']}, {f['REJ_INVOICES']} invoices)"),
-        ("Report", hyperlink(OUTPUT.as_uri())),
-        ("Open it", "make open"),
+        ("Report", hyperlink(OUTPUT.as_uri()) + "  (opening in your browser)"),
         ("Docs", "make docs"),
     ]
     width = max(len(k) for k, _ in rows)

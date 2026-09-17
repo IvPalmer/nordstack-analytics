@@ -8,7 +8,7 @@ DBT_PROFILES_DIR = .
 AIRFLOW_CONSTRAINTS = https://raw.githubusercontent.com/apache/airflow/constraints-3.3.1/constraints-3.12.txt
 
 .NOTPARALLEL:
-.PHONY: bootstrap db venv ingest deps build test docs report open clean nuke airflow-test
+.PHONY: bootstrap db venv ingest deps build test docs report clean nuke airflow-test
 
 bootstrap: db venv ingest deps build report   ## clean clone -> loaded, built, tested warehouse, report and summary
 
@@ -36,11 +36,9 @@ test:
 docs:
 	$(DBT) docs generate && $(DBT) docs serve
 
-report:   ## one-page HTML reading of the marts, then a results summary
+report:   ## one-page HTML reading of the marts, a results summary, and the page in your browser
 	@.venv/bin/python report/build_report.py
-
-open:   ## open the report in the default browser
-	@open report/nordstack-billing-report.html 2>/dev/null || xdg-open report/nordstack-billing-report.html
+	@open report/nordstack-billing-report.html 2>/dev/null || xdg-open report/nordstack-billing-report.html 2>/dev/null || true
 
 clean:
 	$(DBT) clean
