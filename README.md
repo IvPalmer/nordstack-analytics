@@ -35,28 +35,27 @@ Airflow 3.3), `make build` (dbt only), `make nuke` (drop both databases).
     models/marts/         fct_mrr_monthly_by_plan, dim_customer_ltv, fct_churn_monthly
     tests/                singular tests: source diagnostics (warn), disposition, business rules, reconciliation, coverage (error)
     airflow/              nordstack_billing DAG, parse test, deploy notes
-    report/               one-page HTML report (extra, see the end)
+    report/               one-page HTML report (optional extra)
 
 Staging, quarantine and intermediate are views; marts are tables.
 
 ## Modeling decisions
 
-- **Raw stays raw.** Columns arrive as text and are cast once in `base_*`. Empty cells are
-  NULL. A malformed date or amount stops the build rather than being quarantined.
-- **Clean column plus `_raw` column.** When a value fails a rule the clean column is NULL
-  and `_raw` keeps the export value (`email`, `created_at`, `end_date`). No flag columns.
-- **Quarantine, not deletion.** `base_*` assigns a `reject_reason` (non-positive price or
+- **Typing.** Columns arrive as text and are cast once in `base_*`. Empty cells are NULL.
+  A malformed date or amount stops the build rather than being quarantined.
+- **Invalid values.** When a value fails a rule the clean column is NULL and a `_raw`
+  column keeps the export value (`email`, `created_at`, `end_date`). No flag columns.
+- **Rejected rows.** `base_*` assigns a `reject_reason` (non-positive price or
   amount, missing amount or start date, unknown plan, status, currency or subscription).
   `stg_*` keeps the rest, `rej_*` the rejected rows; tests prove clean + rejected = raw.
   Kept on purpose: a subscription with no customer record (its paid invoices count in MRR,
   not in LTV) and a subscription whose end date precedes its start (invoices count, end
   date nulled, never churn).
-- **MRR is billed.** Sum of paid invoice amounts in EUR by invoice month and plan, as
-  asked. FX is a var, `fx_rates_to_eur` (EUR 1.0, SEK 0.087); other currencies are
+- **MRR.** Sum of paid invoice amounts in EUR by invoice month and plan. FX is a var, `fx_rates_to_eur` (EUR 1.0, SEK 0.087); other currencies are
   rejected.
-- **Churn loss is contractual.** Cancelled subscriptions by month of end date, lost MRR =
-  sum of `monthly_price`, assumed EUR since the export has no currency on subscriptions.
-- **Fixed cutoff.** `as_of_date` = 2026-07-28, the last invoice date. Subscriptions
+- **Churn.** Cancelled subscriptions by month of end date; lost MRR is the sum of
+  `monthly_price`, assumed EUR since the export has no currency on subscriptions.
+- **Reporting cutoff.** `as_of_date` = 2026-07-28, the last invoice date. Subscriptions
   starting later are `pending`; cancelled for a later date are `pending_cancellation`
   and still billing. A customer's status is the strongest across their subscriptions.
 - **Ingestion.** dlt `sql_database` with `write_disposition="replace"`: the source has no
@@ -97,16 +96,18 @@ source = €325,282.01 in the marts + (-€196.00) quarantined.
 `airflow/dags/nordstack_billing.py`: `dlt_sync >> dbt_build` every five minutes, email on
 success and on failure. Deployment notes in [`airflow/README.md`](airflow/README.md).
 
-## Next steps
+## Optional extensions
+
+Not required by the assessment; where the project would go next in production.
 
 - Incremental dlt loads once the source exposes an updated-at column or CDC.
 - dbt snapshots on subscriptions for status history and contractual MRR.
 - CI with `dbt build --select state:modified+` against a production manifest.
 - FX from a rates table; dbt-expectations for distribution checks.
 
-## Extra: one-page report
+## One-page report (optional extra)
 
 `make report` renders [`report/nordstack-billing-report.html`](report/nordstack-billing-report.html)
-from the marts (single file, inline SVG charts, printable). Not part of the brief.
+from the marts: a single file with inline SVG charts, printable.
 
 <img src="docs/report.png" width="640" alt="Top of the one-page report">
