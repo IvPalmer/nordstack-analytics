@@ -41,6 +41,7 @@ which are meant to warn. The last thing printed is a results summary with the re
 | `make build` | `dbt build` only |
 | `make docs` | generate and serve the dbt documentation |
 | `make report` | rebuild `report/nordstack-billing-report.html` from the marts and print the summary |
+| `make open` | open the report in the browser |
 | `make airflow-test` | parse the DAG in an isolated Airflow 3.3 install |
 | `make nuke` | stop both databases and drop their volumes |
 
