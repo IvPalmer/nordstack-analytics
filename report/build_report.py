@@ -136,6 +136,13 @@ def main() -> None:
     print(summary(figures(data, cutoff_from_project())))
 
 
+def hyperlink(uri: str) -> str:
+    """OSC 8 terminal hyperlink: clickable in iTerm, Terminal.app, VS Code and Warp."""
+    if not sys.stdout.isatty():
+        return uri
+    return f"\033]8;;{uri}\033\\{uri}\033]8;;\033\\"
+
+
 def summary(f: dict) -> str:
     """Results block printed at the end of make bootstrap and make report."""
     run_results = HERE.parent / "target" / "run_results.json"
@@ -156,7 +163,8 @@ def summary(f: dict) -> str:
         ("Customers", f"{f['CUSTOMERS']}, {f['ACTIVE']} active at the cutoff"),
         ("Churn", f"{f['CHURN_N']} subscriptions, {f['CHURN_EUR']} contractual MRR"),
         ("Quarantined", f"{f['REJ_TOTAL']} rows ({f['REJ_S_LABEL']}, {f['REJ_INVOICES']} invoices)"),
-        ("Report", OUTPUT.as_uri()),
+        ("Report", hyperlink(OUTPUT.as_uri())),
+        ("Open it", "make open"),
         ("Docs", "make docs"),
     ]
     width = max(len(k) for k, _ in rows)
